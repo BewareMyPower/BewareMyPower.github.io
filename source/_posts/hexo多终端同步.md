@@ -1,7 +1,8 @@
 ---
 title: hexo多终端同步
 date: 2018-10-15 20:07:19
-tags:
+tags: 搭环境
+top: 0
 ---
 ## 简介
 hexo的安装还是很简单的，操作也很傻瓜式。常用的基本就下面几个命令
@@ -9,9 +10,11 @@ hexo的安装还是很简单的，操作也很傻瓜式。常用的基本就下�
 s即server，默认在`localhost:4000`启动服务器，在浏览器中即可看到效果，可以通过`-p`选项指定端口。
 2. `hexo d`
 d即deploy(部署)，上传到服务器。一般会加上`-g`选项在本地生成静态文件。如果不上传服务器，可以直接`hexo g`生成静态文件。
-3. `hexo new`
-新建博客，后接博客名，比如`hexo new "test"`，此时hexo框架就会自动生成.md文件。自动新建的.md文件会生成一些模板信息，因此最好使用命令新建博客。生成之后，用vim等本地编辑器修改即可。
-另外在`_config.yml`设置`post_asset_folder`为true，则`hexo new`会新建.md文件的同名目录用来存放图片，并且作为图片的默认路径，也就是说如果待插入图片放在该目录下，路径直接写文件名即可。
+3. `hexo clean`
+删除本地md文件后如果不clean后重新生成，首页可能不会更新。
+4. `hexo new`
+新建博客，后接博客名，比如`hexo new "test"`，此时hexo框架就会自动生成md文件。自动新建的md文件会生成一些模板信息，因此最好使用命令新建博客。生成之后，用vim等本地编辑器修改即可。
+另外在`_config.yml`设置`post_asset_folder`为true，则`hexo new`会新建md文件的同名目录用来存放图片，并且作为图片的默认路径，也就是说如果待插入图片放在该目录下，路径直接写文件名即可。
 
 至于其他命令可以参考[hexo中文文档](https://hexo.io/zh-cn/docs/commands.html)，`_config.yml`的配置也有较为详细地注释。
 
@@ -73,4 +76,49 @@ sh: 1: node: Permission denied
 ~# cat .npmrc
 user=0
 unsafe-perm=true
+```
+hexo博客置顶需要修改npm模块代码，修改`node_modules/hexo-generator-index/lib/generator.js`如下，按照top值排序
+```
+'use strict';
+
+var pagination = require('hexo-pagination');
+
+module.exports = function(locals) {
+  var config = this.config;
+  var posts = locals.posts.sort(config.index_generator.order_by);
+
+  posts.data = posts.data.sort(function(a, b) {
+      if(a.top && b.top) {
+          if(a.top == b.top) return b.date - a.date;
+          else return b.top - a.top;
+      }
+      else if(a.top && !b.top) {
+          return -1;
+      }
+      else if(!a.top && b.top) {
+          return 1;
+      }
+      else return b.date - a.date;
+  });
+
+  var paginationDir = config.pagination_dir || 'page';
+
+  return pagination('', posts, {
+    perPage: config.index_generator.per_page,
+    layout: ['index', 'archive'],
+    format: paginationDir + '/%d/',
+    data: {
+      __index: true
+    }
+  });
+};
+```
+比如我这篇博客的top设置为0。
+```
+---
+title: hexo多终端同步
+date: 2018-10-15 20:07:19
+tags: 搭环境
+top: 0
+---
 ```
