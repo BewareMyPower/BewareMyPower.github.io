@@ -64,19 +64,22 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size);
 - `stream`: 缓冲区对应的文件流
 - `buf`: 自定义缓冲区，若为`NULL`则使用系统自带缓冲区；
 - `mode`: 缓冲方式，下列三个宏之一
-  | 宏 | 意义 |
-  | :- | :--- |
-  | `\_IONBF` | 无缓冲，此时buf和size失去了意义 |
-  | `\_IOLBF` | 行缓冲 |
-  | `\_IOFBF` | 全缓冲 |
+
+| mode宏 | 意义 |
+| :----- | :--- |
+| `_IONBF` | 无缓冲，此时buf和size失去了意义 |
+| `_IOLBF` | 行缓冲 |
+| `_IOFBF` | 全缓冲 |
+
 - `size`: 缓冲区大小至少有size字节
 
 本质上前3个库函数都是调用`setvbuf()`函数，对应关系如下
+
 | 原始调用 | 等价调用 |
 | :------- | :------- |
-| setbuf(stream, buf) | setvbuf(stream, buf, buf ? \_IOFBF : \_IONBF, BUFSIZ) |
-| setbuffer(stream, buf, size) | setvbuf(stream, buf, buf ? \_IOFBF : \_IONBF, size) |
-| setlinebuf(stream) | setvbuf(stream, NULL, \_IOLBF, 0) |
+| `setbuf(stream, buf)` | `setvbuf(stream, buf, buf ? _IOFBF : _IONBF, BUFSIZ)` |
+| `setbuffer(stream, buf, size)` | `setvbuf(stream, buf, buf ? _IOFBF : _IONBF, size)` |
+| `setlinebuf(stream)` | `setvbuf(stream, NULL, _IOLBF, 0)` |
 
 可见`setbuf`和`setbuffer`是用的自定义缓冲区，区别只是前者使用标准库的宏`BUFSIZ`作为缓冲区大小，后者使用`size`参数。
 `setlinebuf`则仍然使用标准库的缓冲区，只不过缓冲机制改成行缓冲。
