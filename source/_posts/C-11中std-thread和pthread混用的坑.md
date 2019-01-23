@@ -172,9 +172,45 @@ __gthrw(pthread_join)
 ## 4. 不可移植的混合调用方法
 有了上述的源码分析后，实际上在`pthread_join()`之后要做的，仅仅是将`std::thread`的内部线程句柄重置就完了。不过源码直接将其用`private`保护，所以得强行做指针转换来修改。
 ```
-  *reinterpret_cast<std::thread::native_handle_type*>(&t) = pthread_t();
+  *reinterpret_cast<pthread_t*>(&t) = pthread_t();
 ```
 将这一句代码添加到`pthread_join()`之后即可。不过本身不可移植指的是这种做法是无法在不同编译器之间移植的，如果指定了编译器使用gcc版本，像这样hack下也未尝不可。
+给个示例，线程函数中`new`一个int，然后`pthread_join`捕获该指针来处理。
+```
+#include <stdio.h>
+#include <assert.h>
+#include <pthread.h>
+#include <thread>
+#include <memory>
+
+void taskNewInt(int x) {
+  pthread_exit(new int(x));
+}
+
+int main() {
+  std::thread t(taskNewInt, 47);
+  void* ret;
+  int error = pthread_join(t.native_handle(), &ret);
+  assert(error == 0);
+
+  printf("thread joinable? %s\n", t.joinable() ? "Yes" : "No");
+
+  *reinterpret_cast<pthread_t*>(&t) = pthread_t();
+  printf("thread joinable? %s\n", t.joinable() ? "Yes" : "No");
+
+  std::unique_ptr<int> p(static_cast<int*>(ret));  // RAII
+  printf("thread exit with %d (%p)\n", *p, p.get());
+  return 0;
+}
+```
+编译运行结果
+```
+$ g++ -std=c++11 native_thread_exit.cc -pthread
+$ ./a.out
+thread joinable? Yes
+thread joinable? No
+thread exit with 47 (0x7fd8640008c0)
+```
 
 ## 5. `pthread_exit`和`pthread_cancel`会抛出异常
 对，你没看错，这两个C接口，会抛出异常。我之前在造线程轮子的时候，在某个调用`pthread_exit()`的包装函数声明为`noexcept`，结果被强制调用`std::terminate()`了。后来发现，原因是`pthread_exit`抛出了异常，而`noexcept`函数中抛出异常不会被捕获，只是简单调用`std::terminate()`了事。
