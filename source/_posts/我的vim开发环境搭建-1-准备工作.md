@@ -131,7 +131,7 @@ export VIMPATH=$HOME/local/vim
 export PATH=$VIMPATH/bin:$PATH
 ```
 
-### 2.4 安装clang 3.9
+### 2.4 安装clang 8.0
 
 去[LLVM下载页](http://releases.llvm.org/download.html)分别下载llvm、clang、clang-tools-extra、compiler-rt源码按照以下命令解压、重命名：
 
