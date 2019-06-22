@@ -166,15 +166,23 @@ $ ls $GOPATH/src/golang.org/x
 lint  sync  tools
 ```
 
-至于具体使用方式，参考[vim-go Wiki](https://github.com/fatih/vim-go/wiki)。
+### 3.5 其他说明
 
-### 3.5 vimrc配置
+vim-go的具体使用方式，参考[vim-go Tutorial](https://github.com/fatih/vim-go/wiki/Tutorial)。
+
+打开go文件时会出现下列错误
 
 ```
-" 打开go文件时会出现下列错误，解决方法参考[#2301](https://github.com/fatih/vim-go/issues/2301)
-" vim-go: Features that rely on gopls will not work correctly in a null module.
+vim-go: Features that rely on gopls will not work correctly in a null module.
+```
+
+解决方法参考[#2301](https://github.com/fatih/vim-go/issues/2301)，在`.vimrc`中添加下列代码即可：
+
+```
 let g:go_null_module_warning = 0
 ```
+
+此外`GoRename`命令只有在项目目录在`$GOPATH/src`下时才能使用，否则会出现`can't find package containing`错误。
 
 ## 4. 总结
 
