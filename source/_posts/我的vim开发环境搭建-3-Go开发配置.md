@@ -168,6 +168,14 @@ lint  sync  tools
 
 至于具体使用方式，参考[vim-go Wiki](https://github.com/fatih/vim-go/wiki)。
 
+### 3.5 vimrc配置
+
+```
+" 打开go文件时会出现下列错误，解决方法参考[#2301](https://github.com/fatih/vim-go/issues/2301)
+" vim-go: Features that rely on gopls will not work correctly in a null module.
+let g:go_null_module_warning = 0
+```
+
 ## 4. 总结
 
 由于是在之前的基础上进行，所以Go开发环境的搭建较为简单，安装Go、重新编译YCM，Ultisnip已经有了，剩下的就是vim-go的安装了。其实最重要的还是YCM的补全功能。
