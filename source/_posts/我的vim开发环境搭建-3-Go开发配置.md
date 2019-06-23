@@ -49,6 +49,8 @@ YCM对Go的补全无需像C++一样通过`.ycm_extra.conf.py`脚本来指定头�
 
 由于Go标准库的静态库已经编译好，位于`$GOROOT/pkg/$GOOS_$GOARCH`目录下，环境变量可通过`go env`命令来查询。而对于`go get`或者`$GOPATH/src`下的项目，如果没有编译成静态库，YCM是无法补全的，因此要用到某些包时需要首先进入包所在目录`go install`。
 
+如果使用了本地包比如`import "./local"`，那么需要把`local.a`文件拷贝到和当前`.go`文件同一目录。
+
 ## 3. vim-go
 
 ```
