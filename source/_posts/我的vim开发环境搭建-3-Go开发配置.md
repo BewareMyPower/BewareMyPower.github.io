@@ -45,6 +45,10 @@ CC="$LOCAL/gcc-5.4.0/bin/gcc" CXX="$LOCAL/gcc-5.4.0/bin/g++" ./install.py  \
 
 Go的编码规范建议使用TAB而非空格表示缩进，因此之前的vim配置中`set expandtab`最好注释掉，防止把TAB扩展成空格。
 
+YCM对Go的补全无需像C++一样通过`.ycm_extra.conf.py`脚本来指定头文件包含目录的，它是通过直接分析处于`$GOROOT/pkg`或`GOPATH/pkg`下的静态库`.a`文件来获取补全信息的。
+
+由于Go标准库的静态库已经编译好，位于`$GOROOT/pkg/$GOOS_$GOARCH`目录下，环境变量可通过`go env`命令来查询。而对于`go get`或者`$GOPATH/src`下的项目，如果没有编译成静态库，YCM是无法补全的，因此要用到某些包时需要首先进入包所在目录`go install`。
+
 ## 3. vim-go
 
 ```
