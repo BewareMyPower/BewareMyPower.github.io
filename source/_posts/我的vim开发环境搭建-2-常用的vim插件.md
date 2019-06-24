@@ -133,7 +133,19 @@ CentOS配置比较简单，C头文件都在`/usr/include`下，C++头文件则�
 '/usr/include',
 '-isystem',
 os.environ['HOME'] + '/local/gcc-5.4.0/include/c++/5.4.0',
+'-isystem',
+os.environ['HOME'] + '/local/gcc-5.4.0/include/c++/5.4.0/x86_64-unknown-linux-gnu'
 ```
+
+需要注意的是`x86_64-unknown-linux-gnu`目录必须添加进去，否则会导致C++标准库无法补全，因为C++标准库头文件包含了该目录下的各种头文件，比如`thread`包含的3个头文件：
+
+```
+#include <bits/functexcept.h>
+#include <bits/functional_hash.h>
+#include <bits/gthr.h>
+```
+
+其中前2个都是出自`$GCC_DIR/include/c++/5.4.0/bits`目录，而第3个则是出自`$GCC_DIR/include/c++/5.4.0/x86_64-unknown-linux-gnu/bits`目录，因此必须把这个目录添加进去，否则头文件会解析失败。
 
 ## 3 ale静态语法检查
 
