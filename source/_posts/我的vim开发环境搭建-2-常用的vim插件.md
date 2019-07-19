@@ -188,7 +188,7 @@ let g:ale_lint_on_insert_leave = 1
 
 ### 3.2 安装cppcheck
 
-要支持`HAVE_RULES`，需要安装[pcre](www.pcre.org)，下载源码解压后，手动`./configure --prefix=<dirname>`、`make`、`make install`安装，然后在`~/.bashrc`中添加如下代码以指定gcc的包含路径和库路径：
+要支持`HAVE_RULES`，需要安装[pcre](https://www.pcre.org)，下载源码解压后，手动`./configure --prefix=<dirname>`、`make`、`make install`安装，然后在`~/.bashrc`中添加如下代码以指定gcc的包含路径和库路径：
 
 ```
 export C_INCLUDE_PATH=$LOCAL/pcre/include:$C_INCLUDE_PATH
