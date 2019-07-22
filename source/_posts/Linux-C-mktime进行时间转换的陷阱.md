@@ -96,4 +96,11 @@ stackoverflow上也有讨论：[mktime-and-tm-isdst](https://stackoverflow.com/q
 >
 > The explicit DST status (0 or 1) should come from something external to the software, for example store it in the file or database, or prompt the user.
 
-但是总而言之，如果非要在和时区无关时，设置为-1时最好的。
+最好的解决方法还是在时间后面加上UTC，比如：
+
+```
+struct tm tm_;
+char* p = strptime("2004-02-29 01:00:00.039 UTC", "%F %T", &tm_);
+```
+
+调用完毕后返回值`p`指向的是`".039 UTC"`，后缀`UTC`并不影响返回值，因此仍然可以对`p`进行`sscanf`或者`strtol`操作获取毫秒数。
