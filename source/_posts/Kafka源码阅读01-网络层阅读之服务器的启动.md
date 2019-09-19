@@ -141,22 +141,70 @@ val credentialProvider: CredentialProvider // 证书提供者
   }
 ```
 
-再看看`RequestChannel`的创建（忽略metric相关的以及之前提过的）：
+## RequestChannel/Acceptor/Processor的字段
+
+从上述代码可知，重点是`RequestChannel`/`Acceptor`/`Processor`这3个类型，于是现在看看它们创建时除去传入构造器的参数外初始化的其他字段（依然忽略metrics相关的）。
+
+首先是`RequestChannel`的字段：
 
 ```scala
-// 创建了固定长度的请求队列，queueSize由queued.max.requests决定
+// 创建了固定长度的请求队列，queueSize由 queued.max.requests 决定
 private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
+// 之前已经提过，创建 Processors 时添加进的
+private val processors = new ConcurrentHashMap[Int, Processor]()
 ```
 
 此外，配置是使用`kafka.server.KafkaConfig`类实现的，默认配置在伴生对象`kafka.server.Defaults`中（比如默认的`queueSize`为500），并在`KafkaConfig`的伴生对象的`configDef`字段创建时加载。
 
-而`Acceptor`的创建也有除去`Processor`外的操作：
+再就是`Acceptor`的字段：
 
 ```scala
-  // NIO Selector, 用于注册 connect, read, write 等事件，并将事件分发给 Acceptor, Processors
-  private val nioSelector = NSelector.open()
-  // 服务通道, 绑定 EndPoint, 用于接收客户端的连接, 类型为 ServerSocketChannel
-  val serverChannel = openServerSocket(endPoint.host, endPoint.port)
+// NIO Selector, 用于注册 connect, read, write 等事件，并将事件分发给 Acceptor, Processors
+private val nioSelector = NSelector.open()
+// 服务通道, 绑定 EndPoint, 用于接收客户端的连接, 类型为 ServerSocketChannel
+val serverChannel = openServerSocket(endPoint.host, endPoint.port)
+// 之前提过的，保存每个 Acceptor 对应的 Processors, 没有存为映射, 因为 Acceptor 要将
+// 连接均衡地分配给 Processors, 不涉及查询操作, 更多地需要遍历, 比如round-robin算法
+private val processors = new ArrayBuffer[Processor]()
+```
+
+其中 `NSelector` 就是 `Selector` 的别名：
+
+```scala
+import java.nio.channels.{Selector => NSelector}
+```
+
+最后是`Processor`的字段：
+
+```scala
+// SocketChannel 的并发队列, 用于管理 Acceptor 分配的socket连接
+private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
+// ConnectionId 到 Response 的映射, 缓存待发送的响应
+private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+// 缓存产生的响应
+private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
+
+// 创建的是 kafka.common.network.Selector, 也就是自己实现的 Selector
+private val selector = createSelector(
+  ChannelBuilders.serverChannelBuilder(listenerName,
+    listenerName == config.interBrokerListenerName,
+    securityProtocol,
+    config,
+    credentialProvider.credentialCache,
+    credentialProvider.tokenCache))
+
+// 用于生成连接的 index, 类似 SocketServer 生成 Processor.id, 不过保证了 index 非负
+private var nextConnectionIndex = 0
+```
+
+不得不说这里为何要使用 `ConcurrentLinkedQueue` 和 `LinkedBlockingDeque` 还是不清楚，但还是先不要在意细节，注意这里保存了2份`Response`，一个只是临时缓存处理后的响应，另一个则是真正待发送的响应，因为用key记录了连接信息：
+
+```scala
+  // 作为 inflightResponses 的key, 记录了本地地址/远程地址, 以及连接对应的索引
+  // 该索引是通过 nextConnectionIndex 自增生成的, 而且非负
+  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
+  }
 ```
 
 ## 服务器启动总结
@@ -167,9 +215,11 @@ private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
 - `SocketServer`保存`EndPoint`到`Acceptor`的映射和`Processor.id`到`Processor`的映射；
 - `requestChannel`持有M*N个`Processor`的`id`到其自身的映射；
-- 每个`Acceptor`持有1个分发事件的`Selector`；
+- 每个`Acceptor`持有1个`Selector`；
 - 每个`Acceptor`持有1个监听`EndPoint`的`ServerSocketChannel`；
 - 每个`Acceptor`持有N个`Processor`组成的数组；
+- 每个 `Processor` 持有1个`Selector`（Kafka自己实现的`Selectable`接口）；
+- 每个`Processor`持有一组socket连接；
 - `acceptors`和`processors`都启动了线程（供`M*(N+1)`个）构成了整个网络层的处理。
 
 Kafka的网络层是使用Reactor模式的，使用了Java NIO，所有的socket读写都是非阻塞模式，具体框架可以参考《Apacha Kafka源码剖析》一书，我目前也是照着这本书的思路去看源码。
