@@ -220,7 +220,9 @@ PS：一个细节，外层`catch`处理了`ControlThrowable`，而内层`catch`�
       // newConnections的SocketChannel依次出队
       val channel = newConnections.poll()
       try {
-        // selector 监听 channel 的 OP_READ 事件, connectionId 为channel的唯一的key
+        // 调用链: selector.registerChannel => selector.buildAndAttachKafkaChannel => channelBuilder.buildChannel()
+        // channel 会注册 OP_READ 事件(返回 SelectionKey)到 selector 上, 然后和 connectionId, SelectionKey 一起构造
+        // KafkaChannel 对象, 以 connectionId 作为key组成键值对加入 selector.channels 中
         selector.register(connectionId(channel.socket), channel)
       } catch {
         // 捕获所有异常, 关闭 对应的socket防止socket泄漏
@@ -232,7 +234,53 @@ PS：一个细节，外层`catch`处理了`ControlThrowable`，而内层`catch`�
   }
 ```
 
-逻辑很简单，就是让`newConnections`中的`SocketChannel`依次出队然后让`selector`监听之。注意，`Acceptor`把这些`Channel`交给`Processor`的时候，并没有将其注册到自己的`selector`中，因为`Acceptor`只负责处理连接，而`Processor`则是要对连接套接字进行读写，因此需要将其注册到自己的`selector`中。
+可见`Acceptor`仅仅将表示连接的`SocketChannel`交给`Processor`，而`Processor`则会为其注册读事件，同时交给`selector`管理时会将其包装为`KafkaChannel`，这个包装过程是由`ChannelBuilder`接口完成的，而接口指向的实际对象是在`Processor.createSelector()`中`ChannelBuilders.serverChannelBuilder()`方法创建的，对`PLAINTEXT`协议，即`PlaintextChannelBuilder`，其`buildChannel()`方法的调用和实现依次为：
+
+```scala
+// id: SocketChannel.connectionId
+// key: SocketChannel.register() 返回的 SelectionKey
+// maxReceiveSize: config.socketRequestMaxBytes, 即配置"socket.request.max.bytes"
+// memoryPool: SocketServer.memoryPool
+KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+key.attach(channel);  // key原本是attach之前的SocketChannel的, 现在改变attach的对象
+```
+
+```java
+    @Override
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
+        try {
+            PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
+            PlaintextAuthenticator authenticator = new PlaintextAuthenticator(configs, transportLayer);
+            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
+                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+        } catch (Exception e) {
+            // 异常处理(略)
+        }
+    }
+```
+
+```java
+    public PlaintextTransportLayer(SelectionKey key) throws IOException {
+        this.key = key;
+        this.socketChannel = (SocketChannel) key.channel();
+    }
+```
+
+可以发现`key`和`channel: SocketChannel`被存到了`KafkaChannel.transportLayer`字段中，因此在后面的源码中，给`KafkaChannel`注册和取消读/写事件到`Selector`上时是使用`transportLayer`的`addInterestOps()`和`removeInterestOps()`方法：
+
+```java
+    @Override
+    public void addInterestOps(int ops) {
+        key.interestOps(key.interestOps() | ops);
+    }
+
+    @Override
+    public void removeInterestOps(int ops) {
+        key.interestOps(key.interestOps() & ~ops);
+   
+```
+
+其实也就是调用了`SelectionKey`的`interestOps()`方法，不过包装了位运算`|`和`&~`来表示添加和移除。
 
 ### 2. processNewResponses
 
@@ -246,20 +294,21 @@ PS：一个细节，外层`catch`处理了`ControlThrowable`，而内层`catch`�
         // 根据响应的类型进行不同操作
         curr.responseAction match {
           case RequestChannel.NoOpAction =>
-            // 无需发送响应给客户端, 因此需要读取更多请求到服务端的socket buffer中
-            // 调用 selector.unmute() 除了将其从 Selector 的 explicitlyMutedChannels 中移除外,
-            // 如果该channel处于连接状态, 会在 transportLayer 注册 OP_READ 事件。
-            updateRequestMetrics(curr) // 更新请求的metrics
+            // 无操作: 无需发送响应给客户端, 因此需要读取更多请求到服务端的socket buffer中
+            // 调用链: selector.unmute() => channel.unmute()
+            // 会将 channel 从 selector.explicitlyMutedChannels 中移除,
+            // 如果该channel处于连接状态, 会在 channel.transportLayer 注册 OP_READ 事件。
+            updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
             openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
           case RequestChannel.SendAction =>
-            // 发送请求: 直接把响应发送给channel (socket), 暂时不细看其他处理, 最终会
-            // 调用 selector.setSend(), 将其加入 inflightResponses 中, 并在 transportLayer 注册 OP_WRITE 事件
+            // 发送: 调用链为 sendResponse() => selector.send() => channel.setSend()
+            // 将响应加入 inflightResponses 中, 并在 channel.transportLayer 注册 OP_WRITE 事件
             val responseSend = curr.responseSend.getOrElse(
               throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
             sendResponse(curr, responseSend)
           case RequestChannel.CloseConnectionAction =>
-            // 关闭请求： 更新metrics, 关闭channel (socket)
+            // 关闭连接： 关闭channel
             updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
@@ -272,6 +321,8 @@ PS：一个细节，外层`catch`处理了`ControlThrowable`，而内层`catch`�
 ```
 
 可以看到，`Processor`仅仅是对缓存在`responseQueue`中的响应进行处理，但是从请求到响应的转换并不是它的工作，查找了`responseQueue`的使用地方，可以看到实际上响应是由`RequestChannel.sendResponse()`方法发送过来的，更上一层，是`KafkaApis.sendResponse()`方法调用该方法，因此实际上是`KafkaApis`（位于`kafka.server`包内）完成对请求的处理。
+
+至于`updateRequestMetrics()`方法和异常处理的部分我们不再关心。
 
 ### 3. poll
 
