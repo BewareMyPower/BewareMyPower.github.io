@@ -94,7 +94,7 @@ def close(channel: SocketChannel): Unit = {
 
 `Selector`的处理和Linux的`epoll_wait`如出一辙，所以这里还是很熟悉的，不同的是没有处理`ready <= 0`的情况，接口文档里写的是
 
->  @return  The number of keys, possibly zero, whose ready-operation sets were update
+> @return  The number of keys, possibly zero, whose ready-operation sets were update
 
 `select()`方法不会返回负值，像`epoll_wait`返回-1的情况，`Selector`是直接抛出异常了，文档里也写了3种异常：
 
@@ -336,6 +336,94 @@ key.attach(channel);  // key原本是attach之前的SocketChannel的, 现在改�
         error(s"Processor $id poll failed due to illegal state or IO exception")
     }
   }
+```
+
+关键是`selector.poll()`方法：
+
+```java
+    @Override
+    public void poll(long timeout) throws IOException {
+        if (timeout < 0) // 检查参数合法性
+            throw new IllegalArgumentException("timeout should be >= 0");
+
+        boolean madeReadProgressLastCall = madeReadProgressLastPoll;
+        clear(); // 清理前1次 poll() 中设置的一些字段 (理应在此2次 poll() 之间对它们全部进行处理)
+
+        boolean dataInBuffers = !keysWithBufferedRead.isEmpty();
+
+        // 在以下情形时将timeout置为0 (代表已经有一些Channel I/O就绪了, select()会立刻返回)
+        // 1. 已经有一些接收数据的 Channel 在上一次 poll() 中读了一些数据;
+        // 2. 有可连接但暂为完成连接的 Channels;
+        // 3. 上次有 Channel 进行了 read() 操作, 并且 Channel 本身缓存了数据.
+        // 最后一种情况比较特殊, 它发生的场景是某些 Channels 有数据在中间缓冲区中但却无法读取(比如因为内存不足)
+        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty() || (madeReadProgressLastCall && dataInBuffers))
+            timeout = 0;
+
+        // 若之前内存池内存耗尽, 而现在又可用了, 将一些因为内存压力而暂时取消读事件的 Channel 重新注册读事件
+        if (!memoryPool.isOutOfMemory() && outOfMemory) {
+            log.trace("Broker no longer low on memory - unmuting incoming sockets");
+            for (KafkaChannel channel : channels.values()) {
+                if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
+                    channel.unmute();
+                }
+            }
+            outOfMemory = false;
+        }
+
+        // 检查 I/O就绪 的keys, 记录 select() 用时
+        long startSelect = time.nanoseconds();
+        int numReadyKeys = select(timeout);
+        long endSelect = time.nanoseconds();
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
+
+        // 1. 存在 I/O就绪 的Channels; 2和3 参见之前将 timeout = 0 部分的注释
+        if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
+            Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
+
+            // Poll 有缓存数据的 Channels (但不Poll底层socket有缓存数据的Channels)
+            if (dataInBuffers) {
+                keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
+                Set<SelectionKey> toPoll = keysWithBufferedRead;
+                keysWithBufferedRead = new HashSet<>(); //poll() calls will repopulate if needed
+                pollSelectionKeys(toPoll, false, endSelect);
+            }
+
+            // Poll 底层 socket 有缓存数据的 Channels
+            pollSelectionKeys(readyKeys, false, endSelect);
+            readyKeys.clear();
+
+            // Poll 待连接的 Channels
+            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+            immediatelyConnectedKeys.clear();
+        } else {
+            madeReadProgressLastPoll = true; //no work is also "progress"
+        }
+
+        long endIo = time.nanoseconds();
+        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+
+        // 利用 select() 结束时刻保证我们不会关闭刚刚传进 pollSelectionKeys() 的连接 (避免将其识别未过期连接)
+        maybeCloseOldestConnection(endSelect);
+
+        // 在关闭过期连接后, 将完成接收的 Channels 加入 completedReceives.
+        addToCompletedReceives();
+    }
+```
+
+这部分继续深究的话比较复杂，Kafka在这方面考虑了不少，上述分析中对一些字段也只是简单地提了下，到此为止。总之，最重要的是直到`poll()`会填充`Selector`内部维护的**已完成接收**/**已完成发送**/**已断开**的`Channel`，以便之后处理。
+
+PS：在处理完成的发送时，在调用`send()`向socket写入数据的同时取消监听对应`Channel`的`OP_WRITE`事件：
+
+```scala
+    // 类 KafkaChannel
+    // 调用链: Selector.PollSelectionKeys() => write() => send()
+    private boolean send(Send send) throws IOException {
+        send.writeTo(transportLayer);
+        if (send.completed())
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+
+        return send.completed();
+    }
 ```
 
 ### 4.  processCompletedReceives
