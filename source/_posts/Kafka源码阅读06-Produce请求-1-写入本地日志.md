@@ -448,7 +448,7 @@ class Partition(val topic: String,
 
 至于**epoch**这个概念是Kafka 0.11引入的，暂时还不清楚具体功能，之后再提。
 
-## appendRecords总结
+## appendToLocalLog总结
 
 在之前将客户端发送的请求解析成了**分区**到**消息集**的映射，而返回值是**分区**到`LogAppendResult`的映射，因此只对遍历整个`Map`，对每对分区消息集进行处理得到`LogAppendResult`即可：
 
