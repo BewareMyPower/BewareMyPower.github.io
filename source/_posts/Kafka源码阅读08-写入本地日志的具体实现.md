@@ -259,7 +259,7 @@ val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromCli
 
 - `max.message.bytes`：每个消息集的最大字节数（这是0.11开始的含义，见[upgrade 0.11 message format](https://kafka.apache.org/11/documentation.html#upgrade_11_message_format)；
 - `log.segment.bytes`：Log Segment的最大字节数（所以需要检测消息集字节数是否超过这个值，否则即使新建文件写入消息集，也无法容纳整个消息集）；
-- `flush.messages`：允许`LogSegment`对象缓存的消息数量，如果缓存消息数超过了该配置就会调用`fsync`写入磁盘。
+- `flush.messages`（Topic级别）：允许`LogSegment`对象缓存的消息数量，如果缓存消息数超过了该配置就会调用`fsync`写入磁盘。
 
 此外，**Record Batch**即**消息集（Message Set）**，Record（记录）即Message（消息）。之所以这里区分，是因为从Kafka 0.11版本开始，消息集的概念发生了变化。在此之前，消息集仅仅是一组消息之前加上Log Overhead（即offset和message size）。而Kafka 0.11版本新增了，V2版本的消息集，增加了独有的header，比如第1条消息和最后1条消息的offset可直接通过header计算得到，还有些其他字段是leader epoch以及实现事务相关的字段。而每条消息（记录）的key和value用varint而非固定4字节的int表示长度，并且消息本身也有header。
 
