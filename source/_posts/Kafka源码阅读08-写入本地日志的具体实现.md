@@ -83,7 +83,7 @@ val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromCli
       // 校验消息的CRC以及消息长度(字节数)是否合法(不超过配置的 max.message.bytes), 并且会设置以下字段:
       // - firstOffset: 第1条消息的offset, V2版本可以从header的firstOffset字段直接取得
       // - lastOffset: 最后1条消息的offset, V2版本可以从header的firstOffset + lastOffsetDelta得到
-      // - shallowCount: 消息数量
+      // - shallowCount: 消息集的数量，shallow即浅层，以消息集为单位
       // - validBytes: 所有长度合法的消息的长度之和
       // - offsetsMonotic: 消息offset是否单调递增，利用每个消息集的lastOffset判断
       // - sourceCodec: 生产者消息集的编码方式
