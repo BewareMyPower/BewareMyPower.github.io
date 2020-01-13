@@ -349,9 +349,11 @@ trait FetchContext extends Logging {
         case Some(partition) =>
           partition.getReplica(replicaId) match {
             case Some(replica) =>
+            case Some(replica) =>
+              // 首先更新分区上的 follower 的状态, 若 LW 或 HW 增加则返回 true
               if (partition.updateReplicaLogReadResult(replica, readResult))
+                // 将 leader 副本的信息 (HW, LogStartOffset, LEO) 更新到读取结果上
                 partition.leaderReplicaIfLocal.foreach { leaderReplica =>
-                  // 将 leader 副本的信息（HW, LogStartOffset, LEO）更新到读取结果上
                   updatedReadResult = readResult.updateLeaderReplicaInfo(leaderReplica)
                 }
             case None => // 当前副本不是分区的副本, 清空读取结果的 records 字段并将 metadata 标记为未知
@@ -363,10 +365,10 @@ trait FetchContext extends Logging {
       }
       topicPartition -> updatedReadResult
     }
-  
+  }
 ```
 
-这里的关键流程是分区可用且当前副本是分区的副本时，对读取结果调用 `updateLeaderReplicaInfo` 更新为 leader 副本的信息：
+然后对读取结果调用 `updateLeaderReplicaInfo` 更新为 leader 副本的信息：
 
 ```scala
   def updateLeaderReplicaInfo(leaderReplica: Replica): LogReadResult =
@@ -376,6 +378,8 @@ trait FetchContext extends Logging {
 ```
 
 利用 Scala case 类的 `copy` 方法，返回更新对应字段后的对象。这里将读取结果的 HW，LogStartOffset，LEO 更新为 leader 副本维护的相应信息。因为 follower 副本发送 Fetch 请求时，leader 副本可能更新 HW（如果之前 follower 没有同步到最新），因此需要把更新后的 HW 发送给 follower。
+
+顺带提下这里涉及到的另一个概念：低水位（LW, Low Watermark）。LW 即所有副本中最小的 LogStartOffset，一般情况下 LW 都是 0，但是如果服务端收到了 `DeleteRecords` 请求，删除日志文件的部分记录（消息）时，会更新 LW。
 
 ## 总结
 
