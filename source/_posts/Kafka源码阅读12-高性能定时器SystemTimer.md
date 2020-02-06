@@ -1,5 +1,5 @@
 ---
-title: 'Kafka源码阅读12: 高精度计时器SystemTimer'
+title: 'Kafka源码阅读12: 高性能计时器SystemTimer'
 date: 2020-02-05 19:22:54
 tags:
   - Kafka
