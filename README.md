@@ -16,6 +16,13 @@
 git clone https://github.com/BewareMyPower/BewareMyPower.github.io.git -b hexo --recursive
 ```
 
+或者
+
+```bash
+git clone https://github.com/BewareMyPower/BewareMyPower.github.io.git -b hexo
+git submodule update --init --recursive
+```
+
 然后用本地配置覆盖 next 主题的默认配置
 
 ```bash
