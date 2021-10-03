@@ -2,6 +2,7 @@
 title: 重新学习 Golang
 date: 2021-10-03 20:46:01
 tags:
+  - Go
 ---
 
 ## 前言
