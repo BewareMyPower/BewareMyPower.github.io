@@ -374,7 +374,7 @@
 <p>主要知识点在前面的设计思路中都讲到了，可以看到 <code>DelayQueue</code> 对象 <code>queue</code> 在时间轮的作用是，保存包含定时任务节点的桶，桶可以来自不同层次的时间轮，当然，所有层次时间轮也共享这个队列。</p>
 <p><code>TimeWheel</code> 本身没有实现 tick 功能，而是借助延迟队列 <code>DelayQueue</code> 来实现时间的推移，假设有 M 个定时任务分布在 N 个桶中，那么插入的时间复杂度为 <code>O(M + N * log N)</code>，其中 <code>M &gt;= N</code>。如果把任务全存到延迟队列中，那么插入的时间复杂度为 <code>O(M * log M)</code>，因此 Kafka 时间轮的优化是有意义的。</p>
 <p>比如对于 1 层时间轮的 3 个桶：<code>[0,4)</code>，<code>[4,8)</code>，<code>[8,12)</code>，有以下过期时间的定时任务：</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1,2,3,8,9,10,11</span><br></pre></td></tr></table></figure>
+<figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">1</span>,<span class="number">2</span>,<span class="number">3</span>,<span class="number">8</span>,<span class="number">9</span>,<span class="number">10</span>,<span class="number">11</span></span><br></pre></td></tr></table></figure>
 
 <p>那么会向 <code>queue</code> 中插入 2 个桶，然后利用 <code>queue</code> 依次弹出 2 个桶，通过遍历弹出每个桶的节点：</p>
 <ul>

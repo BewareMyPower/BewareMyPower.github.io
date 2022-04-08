@@ -248,7 +248,7 @@
 </ol>
 <blockquote>
 <p>这里先简单介绍一下，客户端的实现代码位于 <code>pulsar-client</code> 模块，而接口定义则位于 <code>pulsar-client-api</code> 模块，一些（broker 和客户端等）公用的类位于 <code>pulsar-common</code> 模块。而各模块均位于同名目录下。</p>
-<p>另外 Pulsar 所有的同步调用 API 都只是简单等待异步调用 API（方法名后缀是 Async）返回的 CompletableFuture<T> 对象完成，其返回值为 T。</p>
+<p>另外 Pulsar 所有的同步调用 API 都只是简单等待异步调用 API（方法名后缀是 Async）返回的 CompletableFuture<T> 对象完成，其返回值为 T。</T></p>
 </blockquote>
 <h3 id="消费者的创建"><a href="#消费者的创建" class="headerlink" title="消费者的创建"></a>消费者的创建</h3><p>创建 <code>PulsarClient</code> 时实际上是创建了 <code>PulsarClientImpl</code> 对象，其中 <code>newConsumer</code> 方法是创建一个 builder 用于链式调用：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> ConsumerBuilder&lt;<span class="type">byte</span>[]&gt; newConsumer() &#123;</span><br><span class="line">    <span class="comment">// 另外从这里也可以看到默认的 consumer 是使用 bytes schema</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">ConsumerBuilderImpl</span>&lt;&gt;(<span class="built_in">this</span>, Schema.BYTES);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
