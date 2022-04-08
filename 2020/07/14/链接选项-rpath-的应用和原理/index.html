@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言在测试和部署 C++ 动态库时，经常遇到的问题就是程序链接到了系统路径下的动态库，有时候 make 编译时链接到本地路径的动态库，但实际 make install 时则会丢失这个依赖。本文将要介绍的就是一种通用解决方法，使用 RPATH 来绑定链接路径。 简单动态库编译和使用示例给出以下示例库： 123456789101112&#x2F;&#x2F; foo.h#pragma once#ifdef __cplus">
+<meta property="og:type" content="article">
+<meta property="og:title" content="链接选项 rpath 的应用和原理">
+<meta property="og:url" content="http://yoursite.com/2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言在测试和部署 C++ 动态库时，经常遇到的问题就是程序链接到了系统路径下的动态库，有时候 make 编译时链接到本地路径的动态库，但实际 make install 时则会丢失这个依赖。本文将要介绍的就是一种通用解决方法，使用 RPATH 来绑定链接路径。 简单动态库编译和使用示例给出以下示例库： 123456789101112&#x2F;&#x2F; foo.h#pragma once#ifdef __cplus">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-07-14T10:28:05.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.246Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="链接">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>链接选项 rpath 的应用和原理 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          链接选项 rpath 的应用和原理
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-07-14 18:28:05" itemprop="dateCreated datePublished" datetime="2020-07-14T18:28:05+08:00">2020-07-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>在测试和部署 C++ 动态库时，经常遇到的问题就是程序链接到了系统路径下的动态库，有时候 <code>make</code> 编译时链接到本地路径的动态库，但实际 <code>make install</code> 时则会丢失这个依赖。本文将要介绍的就是一种通用解决方法，使用 <code>RPATH</code> 来绑定链接路径。</p>
+<h2 id="简单动态库编译和使用示例"><a href="#简单动态库编译和使用示例" class="headerlink" title="简单动态库编译和使用示例"></a>简单动态库编译和使用示例</h2><p>给出以下示例库：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo.h</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> __cplusplus</span></span><br><span class="line"><span class="keyword">extern</span> <span class="string">&quot;C&quot;</span> &#123;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> __cplusplus</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;foo.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">()</span> </span>&#123; <span class="built_in">printf</span>(<span class="string">&quot;foo\n&quot;</span>); &#125;</span><br></pre></td></tr></table></figure>
+
+<p>生成动态库 libfoo.so：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">g++ -o libfoo.so -fPIC -shared foo.cc</span><br></pre></td></tr></table></figure>
+
+<p>然后给出调用代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// main.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;foo.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span>* argv[])</span> </span>&#123;</span><br><span class="line">  <span class="built_in">foo</span>();</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译时指定链接当前目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc main.c -L . -lfoo</span><br><span class="line">$ ./a.out </span><br><span class="line">foo</span><br><span class="line">$ ldd a.out | grep libfoo</span><br><span class="line">	libfoo.so (0x00007fc2010f7000)</span><br></pre></td></tr></table></figure>
+
+<p>至此，一切正常。</p>
+<h2 id="依赖动态库的动态库"><a href="#依赖动态库的动态库" class="headerlink" title="依赖动态库的动态库"></a>依赖动态库的动态库</h2><p>实际编写程序时，往往会依赖一些第三方库来避免重复造轮子。比如，这里我们要写一个库依赖于 libfoo.so。</p>
+<p>目录层次：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">.</span><br><span class="line">├── include</span><br><span class="line">│   └── bar.h</span><br><span class="line">├── src</span><br><span class="line">│   └── bar.cc</span><br><span class="line">└── thirdparty</span><br><span class="line">    ├── include</span><br><span class="line">    │   └── foo.h</span><br><span class="line">    └── lib</span><br><span class="line">        └── libfoo.so</span><br></pre></td></tr></table></figure>
+
+<p>然后编译 libbar.so：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">g++ -o libbar.so -fPIC -shared src/bar.cc -I include/ -I thirdparty/include/ -L thirdparty/lib/ -lfoo</span><br></pre></td></tr></table></figure>
+
+<p>问题来了，编译出的 libbar.so 找不到 libfoo.so 的依赖：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ldd libbar.so | grep foo</span><br><span class="line">	libfoo.so =&gt; not found</span><br></pre></td></tr></table></figure>
+
+<p>当然，这样的话，你编译依赖 libbar.so 的程序时会直接失败，从而提醒你去寻找依赖的 libfoo.so：</p>
+<blockquote>
+<p>&#x2F;usr&#x2F;bin&#x2F;ld: warning: libfoo.so, needed by .&#x2F;libbar.so, not found (try using -rpath or -rpath-link)<br>.&#x2F;libbar.so: undefined reference to &#96;foo’</p>
+</blockquote>
+<p>注意这里我们第一次见到 <em>rpath</em> 这个概念。</p>
+<p>但是问题更大的是，假如 libfoo.so 是一个旧版的库，而有个其他用户完全无视影响，直接将 libfoo.so 安装到了系统目录，比如 <code>/usr/lib64</code> 下面。这样，你的程序依赖的 libbar.so 将会找到系统目录下旧的 libfoo.so，而不是你自己维护的新版。如果新版 libfoo.so 的 ABI 发生了改变而 API 不变，比如这里 C 库变成了 C++ 库：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo.h</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> i = <span class="number">0</span>)</span></span>;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;foo.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> i)</span> </span>&#123; <span class="built_in">printf</span>(<span class="string">&quot;foo: %d\n&quot;</span>, i); &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>API 兼容指的是，调用 <code>foo()</code> 仍然合法，但是由于 C++ 的 name mangling，带有默认参数的 <code>foo</code> 对应的符号发生了变化，因此 foo 可能还会出现这样的错误（main.cc 仅仅是调用 <code>bar()</code> 函数，这里就不贴代码了）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -L . -lbar</span><br><span class="line">./libbar.so: undefined reference to `<span class="built_in">foo</span>(<span class="type">int</span>)&#x27;</span><br><span class="line">collect2: error: ld returned <span class="number">1</span> exit status</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>查看 libbar.so 的依赖就什么都明白了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ldd libbar.so | grep libfoo</span><br><span class="line">	libfoo.so =&gt; /usr/lib64/libfoo.so (0x00007efd6daf1000)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>原因是 <code>foo</code> 的函数签名变成了 <code>void foo(int)</code>，而链接到的动态库却是全局的 libfoo.so。简单的解决方式是，将本地库的路径加入 <code>LD_LIBRARY_PATH</code> 中：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">export</span> LD_LIBRARY_PATH=<span class="variable">$PWD</span>/thirdparty/lib:<span class="variable">$LD_LIBRARY_PATH</span></span><br><span class="line">$ g++ main.cc -L . -lbar</span><br><span class="line">$ ./a.out </span><br><span class="line">bar</span><br><span class="line">foo: 0</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>用 <code>ldd</code> 也能查看 libbar.so 依赖的 libfoo.so 不再是全局的，而是本地的。但问题是，如果发布单独的 libbar.so 给用户，而用户又因为某些原因无法升级全局的 libfoo.so，那么每次用户都要手动设置 <code>LD_LIBRARY_PATH</code>。</p>
+<p>此时，另一种解决方法刚好能避免这个问题，也就是使用 rpath。</p>
+<h2 id="rpath-的使用"><a href="#rpath-的使用" class="headerlink" title="rpath 的使用"></a>rpath 的使用</h2><p>rpath 即 runtime path，运行时路径。既可以指定相对路径也可以指定绝对路径。</p>
+<p>编译方式：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -o libbar.so -fPIC -shared src/bar.cc \</span><br><span class="line">   -I include/ -I thirdparty/include/ \</span><br><span class="line">   -L thirdparty/lib/ -lfoo -Wl,-rpath=thirdparty/lib/</span><br><span class="line">$ ldd libbar.so | grep foo</span><br><span class="line">	libfoo.so =&gt; thirdparty/lib/libfoo.so (0x00007f8319965000)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>注意最后的 <code>-Wr,-rpath</code> 指定的是动态库的路径。看似和 <code>-L</code> 重复，实际不然。<code>-L</code> 指定的是编译时链接的 libfoo.so 路径，而 <code>-Wl,-rpath</code> 指定的是（libbar.so）运行时链接的 libfoo.so 路径。这里指定的是相对路径。</p>
+<p>因此如果我们安装 libbar.so 到全局又不影响全局的 libfoo.so，比如安装到 <code>/usr/lib64</code> 下面：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ sudo <span class="built_in">cp</span> libbar.so /usr/lib64</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>我们继续编译 libbar.so 的使用程序：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -lbar</span><br><span class="line">$ ldd a.out | grep foo</span><br><span class="line">	libfoo.so =&gt; thirdparty/lib/libfoo.so (0x00007f5d3d79f000)</span><br><span class="line">$ ldd a.out | grep bar</span><br><span class="line">	libbar.so =&gt; /usr/lib64/libbar.so (0x00007fed07e78000)</span><br><span class="line">$ <span class="built_in">ls</span> /usr/lib64/libfoo.so </span><br><span class="line">/usr/lib64/libfoo.so</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>这样想发布依赖高版本 libfoo.so 的 libbar.so 时，用户只需要在<strong>编译和运行</strong>时，相对路径 <code>thirdparty/lib</code> 下面有高版本 libfoo.so 就行了，无需覆盖全局路径下的低版本 libfoo.so。</p>
+<p>注意如果换个路径运行 a.out，由于 rpath 指定的是相对路径，此时会找不到 libfoo.so。</p>
+<p>所以 rpath 指定绝对路径的做法也是比较常见的，比如编译 libbar.so 时将 libfoo.so 置于不会冲突的系统目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ sudo <span class="built_in">mkdir</span> -p /usr/lib64/foo-1.1</span><br><span class="line">$ sudo <span class="built_in">cp</span> thirdparty/lib/libfoo.so /usr/lib64/foo-1.1</span><br><span class="line">$ g++ -o libbar.so -fPIC -shared src/bar.cc \</span><br><span class="line">   -I include/ -I thirdparty/include/ \</span><br><span class="line">   -L /usr/lib64/foo-1.1 -lfoo -Wl,-rpath=/usr/lib64/foo-1.1</span><br><span class="line"> $ ldd libbar.so | grep foo</span><br><span class="line">	libfoo.so =&gt; /usr/lib64/foo-1.1/libfoo.so (0x00007f83df270000)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>那么用户部署时，只需要将 libfoo.so 放置在 <code>/usr/lib64/foo-1.1</code> 下面就行，这里的 1.1 用于标识版本号。由于该目录并不会被自动连接，从而防止了其他程序自动链接到这个版本的 libfoo.so。</p>
+<h2 id="回到现代，使用-CMake"><a href="#回到现代，使用-CMake" class="headerlink" title="回到现代，使用 CMake"></a>回到现代，使用 CMake</h2><p>但凡稍有规模的程序，直接使用 GCC 编译来构建项目是难以维护的。即使有了 Makefile，管理和维护起来还是相对麻烦。C++ 缺乏类似 Maven 那样的构建系统，但退而求其次，CMake 已经成为了事实上的 C++ 构建通用解决方案。（虽然早期流行的 Autotools 仍然有一定市场）</p>
+<p>以一个极简的 CMakeLists.txt 为例，将 rpath 指定为相对路径</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">2.8</span>.<span class="number">12</span>)</span><br><span class="line"><span class="keyword">project</span>(Bar CXX)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 设置 find_path/find_library 查找的根目录，默认会从 include 以及 lib 子目录查找</span></span><br><span class="line"><span class="keyword">set</span>(CMAKE_PREFIX_PATH <span class="string">&quot;$&#123;PROJECT_SOURCE_DIR&#125;/thirdparty&quot;</span>)</span><br><span class="line"><span class="keyword">find_path</span>(FOO_INCLUDE_DIR NAMES foo.h)</span><br><span class="line"><span class="keyword">find_library</span>(FOO_LIB NAMES libfoo.so)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_library</span>(bar SHARED src/bar.cc)</span><br><span class="line"><span class="keyword">include_directories</span>(./<span class="keyword">include</span> <span class="variable">$&#123;FOO_INCLUDE_DIR&#125;</span>)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(bar <span class="variable">$&#123;FOO_LIB&#125;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 设置 rpath，这里是绝对路径</span></span><br><span class="line"><span class="keyword">set</span>(CMAKE_INSTALL_RPATH <span class="string">&quot;$&#123;PROJECT_SOURCE_DIR&#125;/thirdparty/lib&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 安装到 lib 子目录，该相对路径是相对 CMAKE_INSTALL_PREFIX 而言的</span></span><br><span class="line"><span class="keyword">install</span>(TARGETS bar LIBRARY DESTINATION lib)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>PS：说是回到现代，我这个 CMake 还是老式的风格，现代 CMake 又是另一个话题了，不熟悉 CMake 的话，可以直接从现代 CMake 学起。</p>
+<p>当前目录层次：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">.</span><br><span class="line">├── CMakeLists.txt</span><br><span class="line">├── include</span><br><span class="line">│   └── bar.h</span><br><span class="line">├── main.cc</span><br><span class="line">├── src</span><br><span class="line">│   └── bar.cc</span><br><span class="line">└── thirdparty</span><br><span class="line">    ├── include</span><br><span class="line">    │   └── foo.h</span><br><span class="line">    └── lib</span><br><span class="line">        └── libfoo.so</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>使用 CMake 构建项目：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">mkdir</span> _builds &amp;&amp; $ <span class="built_in">cd</span> _builds/</span><br><span class="line">$ cmake .. -DCMAKE_INSTALL_PREFIX=<span class="variable">$PWD</span>/..</span><br><span class="line">$ make</span><br><span class="line">$ make install</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>之后目录层次（忽略中间目录 <code>_builds</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">.</span><br><span class="line">├── CMakeLists.txt</span><br><span class="line">├── include</span><br><span class="line">│   └── bar.h</span><br><span class="line">├── lib</span><br><span class="line">│   └── libbar.so</span><br><span class="line">├── main.cc</span><br><span class="line">├── src</span><br><span class="line">│   └── bar.cc</span><br><span class="line">└── thirdparty</span><br><span class="line">    ├── include</span><br><span class="line">    │   └── foo.h</span><br><span class="line">    └── lib</span><br><span class="line">        └── libfoo.so</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>类似地，为了部署的话，可以将 libfoo.so 部署到系统目录 <code>/usr/lib64</code> 的子目录。</p>
+<p>也可以修改成相对路径：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span>(CMAKE_SHARED_LINKER_FLAGS <span class="variable">$&#123;CMAKE_SHARED_LINKER_FLAGS&#125;</span> -Wl,-rpath,&#x27;$ORIGIN/thirdparty&#x27;)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>$ORIGIN</code> 会被替换成动态库所处的绝对路径，也就是说只要 libfoo.so 处于 libbar.so 同级目录 thirdparty 下面，如下图所示：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">.</span><br><span class="line">├── libbar.so</span><br><span class="line">└── thirdparty</span><br><span class="line">    └── libfoo.so</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>之后 libbar.so 就会链接到 thirdparty&#x2F;libfoo.so，并且都是绝对路径。</p>
+<h2 id="Linux-动态库查找路径"><a href="#Linux-动态库查找路径" class="headerlink" title="Linux 动态库查找路径"></a>Linux 动态库查找路径</h2><p>最后一节，以理论来结尾。前文侧重实践，有了实践作为基础，回过头来看原理就更有体会了。</p>
+<p>一个典型的 C&#x2F;C++ 程序的构建流程是：预处理，汇编，编译，链接。而执行链接的程序其实是 <code>ld</code>，通常编译器比如 GCC 都会自动调用 <code>ld</code> 去进行链接，用户不必关注其中的细节。而 <code>ld</code> 查找动态库的顺序是：</p>
+<ol>
+<li>rpath 指定的目录；</li>
+<li>环境变量 <code>LD_LIBRARY_PATH</code> 指定的目录；</li>
+<li>runpath 指定的目录；</li>
+<li><code>/etc/ld.so.cache </code> 缓存文件，通常包含 <code>/etc/ld.so.conf</code> 文件编译出的二进制俩别哦（比如 CentOS 上，该文件会使用 include 从而使用 <code>ld.so.conf.d</code> 目录下面所有的 <code>*.conf</code> 文件，这些都会缓存在 ld.so.cache 中）</li>
+<li>系统默认路径，比如 <code>/lib</code>，<code>/usr/lib</code>。</li>
+</ol>
+<p>在编译时若使用 <code>-z nodefaultlib</code> 选项编译，则会跳过 4 和 5。至于 runpath，和 rpath 类似，都是二进制（ELF）文件的动态 section 属性（分别为 <code>DT_RUNPATH</code> 和 <code>DT_RPATH</code>），唯一区别就是是否优先于 <code>LD_LIBRARY_PATH</code> 来查找。这里就不详述了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>至此，读者对如何编译&#x2F;部署动态库，以及动态库之间的依赖关系应该有了一定的认识。</p>
+<p>相比而言，静态链接，静态链接部署简单，像 Golang 这种语言直接全部静态链接，受到了不少用户的青睐，而且占用体积大在现代已经几乎不再是需要特别考虑的问题。</p>
+<p>但动态库有动态库的好处，比如在大型项目有多个组件依赖时，如果全部静态链接，则每次修改依赖的模块，都要将主模块重新编译一遍，对于 C++ 这种编译速度可能会非常耗时的语言是灾难性的。</p>
+<p>另外，提供插件式接口给解释型语言（比如 Python 和 PHP）来调用时，动态库是必须的，解释器可以动态加载动态库。如果使用静态链接，恐怕没人愿意每换一个插件就要将解释器重新编译一遍。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/%E9%93%BE%E6%8E%A5/" rel="tag"># 链接</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/02/05/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB12-%E9%AB%98%E6%80%A7%E8%83%BD%E5%AE%9A%E6%97%B6%E5%99%A8SystemTimer/" rel="prev" title="Kafka源码阅读12: 高性能计时器SystemTimer">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读12: 高性能计时器SystemTimer
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/08/31/vtable-%E5%92%8C-typeinfo-%E7%AC%A6%E5%8F%B7%E4%B8%A2%E5%A4%B1%E6%8E%92%E6%9F%A5%E7%AC%94%E8%AE%B0/" rel="next" title="vtable 和 typeinfo 符号丢失排查笔记">
+      vtable 和 typeinfo 符号丢失排查笔记 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AE%80%E5%8D%95%E5%8A%A8%E6%80%81%E5%BA%93%E7%BC%96%E8%AF%91%E5%92%8C%E4%BD%BF%E7%94%A8%E7%A4%BA%E4%BE%8B"><span class="nav-number">2.</span> <span class="nav-text">简单动态库编译和使用示例</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BE%9D%E8%B5%96%E5%8A%A8%E6%80%81%E5%BA%93%E7%9A%84%E5%8A%A8%E6%80%81%E5%BA%93"><span class="nav-number">3.</span> <span class="nav-text">依赖动态库的动态库</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#rpath-%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="nav-number">4.</span> <span class="nav-text">rpath 的使用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9B%9E%E5%88%B0%E7%8E%B0%E4%BB%A3%EF%BC%8C%E4%BD%BF%E7%94%A8-CMake"><span class="nav-number">5.</span> <span class="nav-text">回到现代，使用 CMake</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Linux-%E5%8A%A8%E6%80%81%E5%BA%93%E6%9F%A5%E6%89%BE%E8%B7%AF%E5%BE%84"><span class="nav-number">6.</span> <span class="nav-text">Linux 动态库查找路径</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">7.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

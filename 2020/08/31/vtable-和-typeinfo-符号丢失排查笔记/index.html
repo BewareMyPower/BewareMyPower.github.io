@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 前言简单说原来的结构是有一个类 Foo，并且重载了流运算符 operator&lt;&lt;，在另一个类 Caller 中直接 &lt;&lt; 打印出 Foo 对象。 现在由于功能扩充，Foo 可能有多种变体，因此需要进行以下重构： 1234FooBase  -&gt; Foo  -&gt; AnotherFoo  -&gt; ...  然后 Caller 内部存放的对象从 std:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="vtable 和 typeinfo 符号丢失排查笔记">
+<meta property="og:url" content="http://yoursite.com/2020/08/31/vtable-%E5%92%8C-typeinfo-%E7%AC%A6%E5%8F%B7%E4%B8%A2%E5%A4%B1%E6%8E%92%E6%9F%A5%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 前言简单说原来的结构是有一个类 Foo，并且重载了流运算符 operator&lt;&lt;，在另一个类 Caller 中直接 &lt;&lt; 打印出 Foo 对象。 现在由于功能扩充，Foo 可能有多种变体，因此需要进行以下重构： 1234FooBase  -&gt; Foo  -&gt; AnotherFoo  -&gt; ...  然后 Caller 内部存放的对象从 std:">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-08-31T11:56:06.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.233Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/08/31/vtable-%E5%92%8C-typeinfo-%E7%AC%A6%E5%8F%B7%E4%B8%A2%E5%A4%B1%E6%8E%92%E6%9F%A5%E7%AC%94%E8%AE%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>vtable 和 typeinfo 符号丢失排查笔记 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/08/31/vtable-%E5%92%8C-typeinfo-%E7%AC%A6%E5%8F%B7%E4%B8%A2%E5%A4%B1%E6%8E%92%E6%9F%A5%E7%AC%94%E8%AE%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          vtable 和 typeinfo 符号丢失排查笔记
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-08-31 19:56:06" itemprop="dateCreated datePublished" datetime="2020-08-31T19:56:06+08:00">2020-08-31</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>简单说原来的结构是有一个类 <code>Foo</code>，并且重载了流运算符 <code>operator&lt;&lt;</code>，在另一个类 <code>Caller</code> 中直接 <code>&lt;&lt;</code> 打印出 <code>Foo</code> 对象。</p>
+<p>现在由于功能扩充，<code>Foo</code> 可能有多种变体，因此需要进行以下重构：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">FooBase</span><br><span class="line">  -&gt; Foo</span><br><span class="line">  -&gt; AnotherFoo</span><br><span class="line">  -&gt; ...</span><br></pre></td></tr></table></figure>
+
+<p>然后 <code>Caller</code> 内部存放的对象从 <code>std::unique_ptr&lt;Foo&gt;</code> 改成了 <code>std::unique_ptr&lt;FooBase&gt;</code>。</p>
+<h2 id="基本知识回顾：流运算符重载"><a href="#基本知识回顾：流运算符重载" class="headerlink" title="基本知识回顾：流运算符重载"></a>基本知识回顾：流运算符重载</h2><p>对于类 <code>Foo</code>，流运算符重载是一个全局函数（注意，不是类成员函数）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">std::ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp; os, <span class="type">const</span> Foo&amp; foo) &#123;</span><br><span class="line">    <span class="comment">// os &lt;&lt; foo 的内部字段</span></span><br><span class="line">    <span class="keyword">return</span> os;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>为了能直接访问 <code>Foo</code> 的内部字段，一般会将该重载函数声明为类 <code>Foo</code> 的友元函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Foo</span> &#123;</span><br><span class="line">    <span class="keyword">friend</span> std::ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp;, <span class="type">const</span> Foo&amp;);</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>这里要避免一个误区，那就是将 <code>operator&lt;&lt;</code> 作为类成员函数的话，比如：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Foo</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">    ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp; os) <span class="type">const</span> &#123;</span><br><span class="line">        <span class="comment">// os &lt;&lt; 内部字段</span></span><br><span class="line">        <span class="keyword">return</span> os;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>对应的调用是这样：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Foo foo;</span><br><span class="line">foo.<span class="keyword">operator</span>&lt;&lt;(std::cout);  <span class="comment">// 完整调用方式</span></span><br><span class="line">foo &lt;&lt; std::cout;           <span class="comment">// 简略版调用方式</span></span><br></pre></td></tr></table></figure>
+
+<p>而 <code>std::cout &lt;&lt; os</code> 则是由全局函数来重载的，也就是是标准库的 <code>std::ostream</code> 类的 <code>operator&lt;&lt;</code> 方法调用的是 <code>std::ostream&amp; operator&lt;&lt;(std::ostream&amp;, const T&amp;)</code> 函数来实现对任意类型 <code>T</code> 的对象进行输出。</p>
+<h2 id="继承体系的解决方式以及-vtable-信息缺失问题"><a href="#继承体系的解决方式以及-vtable-信息缺失问题" class="headerlink" title="继承体系的解决方式以及 vtable 信息缺失问题"></a>继承体系的解决方式以及 vtable 信息缺失问题</h2><p>对于继承体系，我们想要的其实是下面这样：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Base</span> &#123; <span class="comment">/* ... */</span> &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Derived</span> &#123; <span class="comment">/* ... */</span> &#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">auto</span> base = <span class="keyword">new</span> Derived;</span><br><span class="line">std::cout &lt;&lt; *base &lt;&lt; std::endl;  <span class="comment">// 调用 Derived 相关的 operator&lt;&lt;，且只暴露 Base 接口</span></span><br></pre></td></tr></table></figure>
+
+<p>可以用间接的方式来实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Base</span> &#123;</span><br><span class="line">    <span class="keyword">friend</span> std::ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp; os, <span class="type">const</span> Base&amp; base) &#123;</span><br><span class="line">        <span class="keyword">return</span> base.<span class="built_in">print</span>(os);</span><br><span class="line">    &#125;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> std::ostream&amp; <span class="title">print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">        <span class="comment">// os &lt;&lt; 内部字段</span></span><br><span class="line">        <span class="keyword">return</span> os;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>派生类只要重载 <code>print</code> 方法即可。</p>
+<p>然而我这么干了，编译 OK，但是链接时出错：</p>
+<blockquote>
+<p>undefined reference to &#96;vtable for 【基类名】</p>
+<p>undefined reference to &#96;typeinfo for 【基类名】</p>
+</blockquote>
+<h2 id="问题排查"><a href="#问题排查" class="headerlink" title="问题排查"></a>问题排查</h2><p>一开始只有这个信息，所以不好排除，我对比了半天（<code>override</code> 和 <code>virtual</code> 关键字数量对比），基类的虚函数我在派生类全都实现了啊。</p>
+<hr>
+<p>PS：用 <code>override</code> 关键字可以很大程度避免重载函数名写错的情况，比如：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Base</span> &#123;</span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>&#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Derived</span> : Base &#123;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">doSOmeting</span><span class="params">()</span> <span class="keyword">override</span> </span>&#123; <span class="comment">/* ... */</span> &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>此时不小心写错了虚函数名字，用 <code>override</code> 关键字就直接能在编译时提示错误：</p>
+<blockquote>
+<p>error: ‘void Derived::doSOmeting()’ marked ‘override’, but does not override</p>
+</blockquote>
+<p>如果不加 <code>override</code> 关键字，编译就不会出错，但是调用的是基类 <code>Base</code> 的 <code>doSomething()</code> 方法，派生类并没有重写该方法。导致这种低级错误得等到运行期去排查。</p>
+<hr>
+<p>回到问题，这里我就有点束手无策了，总感觉自己有些基本知识弄错了（实际上并没有）。首先想了下是不是我虚析构函数的问题（因为除了虚析构函数外其他虚函数都是纯虚函数）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">FooBase</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">virtual</span> ~<span class="built_in">FooBase</span>() &#123;&#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>然后改成了头文件声明，源文件定义：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo_base.h</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">FooBase</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">virtual</span> ~<span class="built_in">FooBase</span>();</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// foo_base.cc</span></span><br><span class="line">FooBase::~<span class="built_in">FooBase</span>() &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>一个有趣的现象，虽然还是报错，但是报错信息变了，有了更具体的信息：</p>
+<blockquote>
+<p>undefined reference to &#96;FooBase::print(std::ostream&amp;) const’</p>
+</blockquote>
+<p>到这里我才回过头来审视 <code>print</code> 方法。不过为了验证观点，首先把这个虚函数给删掉，链接成功，证明了这个观点。再回过头来看，我并没有将其实现为纯虚函数，而是：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">print</span><span class="params">(std::ostream&amp;)</span> <span class="type">const</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>只是声明，因此在基类的编译单元缺少其实现信息。看起来很简单的错误，但是在压力和恐慌之下，人的眼睛是不可相信的，至少我的肉眼看到的，这个分号前面就有个 <code>= 0</code>。</p>
+<h2 id="追根溯源"><a href="#追根溯源" class="headerlink" title="追根溯源"></a>追根溯源</h2><p>能定位到这个错误，有一定程度上是因为我恰好把虚函数放到源文件中，有了新的报错信息。那么区别在哪呢？这里复现一下。</p>
+<h3 id="复现"><a href="#复现" class="headerlink" title="复现"></a>复现</h3><p>给出以下源文件：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// base.h</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Base</span> &#123;</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">Base</span>() &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::ostream&amp; <span class="title">print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">friend</span> std::ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp; os, <span class="type">const</span> Base&amp; base) &#123;</span><br><span class="line">    <span class="keyword">return</span> base.<span class="built_in">print</span>(os);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// derived.h</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;base.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Derived</span> : Base &#123;</span><br><span class="line">  <span class="function">std::ostream&amp; <span class="title">print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span> <span class="keyword">override</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// derived.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;derived.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function">std::ostream&amp; <span class="title">Derived::print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> (os &lt;&lt; <span class="string">&quot;Derived&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译成动态库 <code>libbase.so</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -o libbase.so derived.cc -std=c++11 -fPIC -shared</span><br></pre></td></tr></table></figure>
+
+<p>因为是动态库，开启了 <code>-fPIC</code> 选项，即  <strong>p</strong>osition-<strong>i</strong>ndependent <strong>c</strong>ode，位置无关的代码，也就是函数（符号）的实现暂时可以不定位到具体的位置，而是在和其他编译单元链接时再定位。</p>
+<p>这里给出调用代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// main.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;derived.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span>* argv[])</span> </span>&#123;</span><br><span class="line">  <span class="function">std::unique_ptr&lt;Base&gt; <span class="title">base</span><span class="params">(<span class="keyword">new</span> Derived)</span></span>;</span><br><span class="line">  std::cout &lt;&lt; *base &lt;&lt; std::endl;</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>编译：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -std=c++11 -L. -lfoo</span><br><span class="line">/tmp/cc39RCrN.o: In <span class="keyword">function</span> `Base::Base()<span class="string">&#x27;:</span></span><br><span class="line"><span class="string">main.cc:(.text._ZN4BaseC2Ev[_ZN4BaseC5Ev]+0x9): undefined reference to `vtable for Base&#x27;</span></span><br><span class="line">/tmp/cc39RCrN.o: In <span class="keyword">function</span> `Derived::Derived()<span class="string">&#x27;:</span></span><br><span class="line"><span class="string">main.cc:(.text._ZN7DerivedC2Ev[_ZN7DerivedC5Ev]+0x19): undefined reference to `vtable for Derived&#x27;</span></span><br><span class="line">collect2: error: ld returned 1 <span class="built_in">exit</span> status</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看符号表"><a href="#查看符号表" class="headerlink" title="查看符号表"></a>查看符号表</h3><p>使用 <code>nm</code> 查看符号表：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">$ nm libbase.so | egrep <span class="string">&quot;(Base|Derived)&quot;</span></span><br><span class="line">0000000000000cda W _ZN4BaseD0Ev</span><br><span class="line">0000000000000ca4 W _ZN4BaseD1Ev</span><br><span class="line">0000000000000ca4 W _ZN4BaseD2Ev</span><br><span class="line">0000000000000d42 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000d00 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000d00 W _ZN7DerivedD2Ev</span><br><span class="line">0000000000000c20 T _ZNK7Derived5printERSo</span><br><span class="line">                 U _ZTI4Base</span><br><span class="line">0000000000201058 V _ZTI7Derived</span><br><span class="line">0000000000000dc8 V _ZTS7Derived</span><br><span class="line">                 U _ZTV4Base</span><br><span class="line">0000000000201030 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>由于 <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Name_mangling">name mangling</a>，上面的比较难辨认。注意第二列的符号，从 <a target="_blank" rel="noopener" href="https://linux.die.net/man/1/nm"><code>nm</code> 帮助手册</a> 可知：</p>
+<ul>
+<li><code>W</code>：没有标记成<strong>弱对象</strong>的弱（<strong>W</strong>eak）符号，当弱符号链接到普通符号时不会报错，当弱符号被链接且该符号未定义时，该符号的值用一种系统特定的方式决定，不会报错。某些系统上，大写的 <code>W</code> 代表默认值被指定。</li>
+<li><code>T</code>：符号在文本（代码）段。</li>
+<li><code>U</code>：符号未定义（<strong>U</strong>ndefined ）。</li>
+<li><code>V</code>：<strong>弱对象</strong>，其余说明同 <code>W</code>。</li>
+</ul>
+<p>PS：即使使用 <code>delete</code> 禁止拷贝构造函数和拷贝赋值运算符，符号表仍然不变。</p>
+<p>如果将 <code>Base::print</code> 改成纯虚函数呢？</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">virtual</span> std::ostream&amp; <span class="title">print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p>符号表变成了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">0000000000000dda W _ZN4BaseD0Ev</span><br><span class="line">0000000000000da4 W _ZN4BaseD1Ev</span><br><span class="line">0000000000000da4 W _ZN4BaseD2Ev</span><br><span class="line">0000000000000e42 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000e00 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000e00 W _ZN7DerivedD2Ev</span><br><span class="line">0000000000000d20 T _ZNK7Derived5printERSo</span><br><span class="line">00000000002010b8 V _ZTI4Base</span><br><span class="line">00000000002010a0 V _ZTI7Derived</span><br><span class="line">0000000000000ed1 V _ZTS4Base</span><br><span class="line">0000000000000ec8 V _ZTS7Derived</span><br><span class="line">0000000000201078 V _ZTV4Base</span><br><span class="line">0000000000201050 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>这里列出区别：</p>
+<ul>
+<li><code>_ZTI4Base</code> 和 <code>_ZTV4Base</code> 从 <code>U</code>（未定义）变成了 <code>V</code>，也就是弱对象。</li>
+<li>多了个弱对象 <code>_ZTS4Base</code>。</li>
+</ul>
+<p>然后将析构函数单独抽离到 <code>base.cc</code> 来实现，重新编译动态库：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -o libbase.so base.cc derived.cc -std=c++11 -fPIC -shared</span><br></pre></td></tr></table></figure>
+
+<p>符号表变成了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">0000000000000d66 T _ZN4BaseD0Ev</span><br><span class="line">0000000000000d30 T _ZN4BaseD1Ev</span><br><span class="line">0000000000000d30 T _ZN4BaseD2Ev</span><br><span class="line">0000000000000eb2 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000e70 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000e70 W _ZN7DerivedD2Ev</span><br><span class="line">0000000000000dec T _ZNK7Derived5printERSo</span><br><span class="line">0000000000201138 V _ZTI4Base</span><br><span class="line">0000000000201170 V _ZTI7Derived</span><br><span class="line">0000000000000f29 V _ZTS4Base</span><br><span class="line">0000000000000f38 V _ZTS7Derived</span><br><span class="line">0000000000201110 V _ZTV4Base</span><br><span class="line">0000000000201148 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>主要区别：</p>
+<ul>
+<li>三个 <code>_ZN4BaseD&lt;i&gt;Ev</code>（i 是0，1，2）从 <code>W</code>（弱符号）变成了 <code>T</code>（文本段）。</li>
+</ul>
+<p>而重新将 <code>print</code> 改成未定义的函数后，符号表变成了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">0000000000000d96 T _ZN4BaseD0Ev</span><br><span class="line">0000000000000d60 T _ZN4BaseD1Ev</span><br><span class="line">0000000000000d60 T _ZN4BaseD2Ev</span><br><span class="line">0000000000000ee2 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000ea0 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000ea0 W _ZN7DerivedD2Ev</span><br><span class="line">                 U _ZNK4Base5printERSo</span><br><span class="line">0000000000000e1c T _ZNK7Derived5printERSo</span><br><span class="line">0000000000201168 V _ZTI4Base</span><br><span class="line">00000000002011a0 V _ZTI7Derived</span><br><span class="line">0000000000000f59 V _ZTS4Base</span><br><span class="line">0000000000000f68 V _ZTS7Derived</span><br><span class="line">0000000000201140 V _ZTV4Base</span><br><span class="line">0000000000201178 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>最大的区别，这里的 <code>U</code> 是 <code>_ZNK4Base5printERSo</code>，很显然，就是基类 <code>Base</code> 的 <code>print</code> 方法。虽然对链接的知识已经忘了不少（得去补课了），但回顾这 4 张符号表，还是可以大致看出为啥析构函数单独分离出去后信息发生变化。</p>
+<p>最开始析构函数实现写在 .h 文件里时，未定义的符号有两个（一个是 <code>typeinfo</code> 一个是 <code>vtable</code>）：</p>
+<ul>
+<li><code>_ZTI4Base</code></li>
+<li><code>_ZTV4Base</code></li>
+</ul>
+<p>而析构函数独立出去后，未定义的符号：</p>
+<ul>
+<li><code>_ZNK4Base5printERSo</code>：<code>Base</code> 类的 <code>print</code> 函数。</li>
+</ul>
+<p>至少现在我们知道了为啥会有提示错误区别，但是编译器为啥这么干，还是不清楚。只能说，从经验的角度</p>
+<h3 id="优化一下？"><a href="#优化一下？" class="headerlink" title="优化一下？"></a>优化一下？</h3><p>所以说明明可以写在源文件里，为何要写在头文件中？写在源文件里至少还能帮助调试。当然这是出自 C++er 的直觉：要是内联了呢？</p>
+<p>于是回到最初的模式（<code>Base</code> 虚析构函数在头文件实现，<code>print</code> 不实现），开 <code>-O2</code> 编译，符号表：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">0000000000000b30 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000b20 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000b20 W _ZN7DerivedD2Ev</span><br><span class="line">0000000000000b00 T _ZNK7Derived5printERSo</span><br><span class="line">                 U _ZTI4Base</span><br><span class="line">0000000000200cb0 V _ZTI7Derived</span><br><span class="line">0000000000000bc0 V _ZTS7Derived</span><br><span class="line">0000000000200cc8 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>相比默认的（<code>-O0</code> 编译）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">0000000000000cda W _ZN4BaseD0Ev</span><br><span class="line">0000000000000ca4 W _ZN4BaseD1Ev</span><br><span class="line">0000000000000ca4 W _ZN4BaseD2Ev</span><br><span class="line">0000000000000d42 W _ZN7DerivedD0Ev</span><br><span class="line">0000000000000d00 W _ZN7DerivedD1Ev</span><br><span class="line">0000000000000d00 W _ZN7DerivedD2Ev</span><br><span class="line">0000000000000c20 T _ZNK7Derived5printERSo</span><br><span class="line">                 U _ZTI4Base</span><br><span class="line">0000000000201058 V _ZTI7Derived</span><br><span class="line">0000000000000dc8 V _ZTS7Derived</span><br><span class="line">                 U _ZTV4Base</span><br><span class="line">0000000000201030 V _ZTV7Derived</span><br></pre></td></tr></table></figure>
+
+<p>首先前三个 <code>Base</code> 的符号（构造函数）被直接内联了。<code>_ZTV4Base</code> 也没了（虚表？），编译 <code>main.cc</code> 报错信息也少了：</p>
+<blockquote>
+<p>$ g++ main.cc -std&#x3D;c++11 -L. -lbase -O2<br>.&#x2F;libbase.so: undefined reference to &#96;typeinfo for Base’<br>collect2: error: ld returned 1 exit status</p>
+</blockquote>
+<p>也就是说 <code>_ZTV4Base</code> 实际上就是 <code>vtable</code>（<code>V</code> 代表 <strong>v</strong>table），而另一个保留的 <code>_ZTI4Base</code> 则是类型信息（<code>I</code> 代表 type<strong>i</strong>nfo）。</p>
+<p>看来我作为 C++er 的直觉还是对的，内联了导致虚析构函数就是个普通函数一样。但如果把虚析构函数给独立出去，那么开不开 <code>-O2</code> 优化，结果都一样。</p>
+<h3 id="name-mangling-还原"><a href="#name-mangling-还原" class="headerlink" title="name mangling 还原"></a>name mangling 还原</h3><p>其实 <code>nm</code> 已经提供了还原功能了，加上 <code>-C</code> 选项即可（这是 <code>-O2</code> 优化+析构函数在头文件里+<code>print</code> 函数未定义）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ nm -C libbase.so | egrep <span class="string">&quot;(Base|Derived)&quot;</span></span><br><span class="line">0000000000000b30 W Derived::~Derived()</span><br><span class="line">0000000000000b20 W Derived::~Derived()</span><br><span class="line">0000000000000b20 W Derived::~Derived()</span><br><span class="line">0000000000000b00 T Derived::<span class="built_in">print</span>(std::ostream&amp;) const</span><br><span class="line">                 U typeinfo <span class="keyword">for</span> Base</span><br><span class="line">0000000000200cb0 V typeinfo <span class="keyword">for</span> Derived</span><br><span class="line">0000000000000bc0 V typeinfo name <span class="keyword">for</span> Derived</span><br><span class="line">0000000000200cc8 V vtable <span class="keyword">for</span> Derived</span><br></pre></td></tr></table></figure>
+
+<p>PS：嗯，前面的内容就当踩坑了……懒得改……</p>
+<p>此外，也可以看到析构函数放在源文件里时符号表多了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">0000000000000d70 T Base::~Base()</span><br><span class="line">0000000000000d60 T Base::~Base()</span><br><span class="line">0000000000000d60 T Base::~Base()</span><br></pre></td></tr></table></figure>
+
+<p>对应的符号是以 <code>D</code> 结尾的，即 <code>D0</code>&#x2F;<code>D1</code>&#x2F;<code>D2</code>。至于为啥有三个析构函数我也不知道……对比了下普通类，只有两个析构函数（<code>D1</code>&#x2F;<code>D2</code>）。</p>
+<h3 id="为何析构函数的符号有无会导致结果变化"><a href="#为何析构函数的符号有无会导致结果变化" class="headerlink" title="为何析构函数的符号有无会导致结果变化"></a>为何析构函数的符号有无会导致结果变化</h3><p>从上述分析可知，析构函数如果放在头文件里，无论是否内联优化，最终符号表里都只是 vtable 缺失。我大致猜测是，仅有一个虚函数的符号没有定义。</p>
+<p>于是修改 <code>Base</code> 类的实现，加一个有实现的虚函数 <code>f</code>：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// base.h</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Base</span> &#123;</span><br><span class="line">  <span class="built_in">Base</span>() = <span class="keyword">default</span>;</span><br><span class="line">  <span class="built_in">Base</span>(<span class="type">const</span> Base&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  Base&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Base&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">Base</span>() &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">f</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::ostream&amp; <span class="title">print</span><span class="params">(std::ostream&amp; os)</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">friend</span> std::ostream&amp; <span class="keyword">operator</span>&lt;&lt;(std::ostream&amp; os, <span class="type">const</span> Base&amp; base) &#123;</span><br><span class="line">    <span class="keyword">return</span> base.<span class="built_in">print</span>(os);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// base.cc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;base.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">Base::f</span><span class="params">()</span> <span class="type">const</span> </span>&#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>结果：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -o libbase.so base.cc derived.cc -std=c++11 -fPIC -shared -O2</span><br><span class="line">$ nm -C libbase.so | egrep <span class="string">&quot;(Base|Derived)&quot;</span></span><br><span class="line">0000000000000d70 W Base::~Base()</span><br><span class="line">0000000000000d60 W Base::~Base()</span><br><span class="line">0000000000000d60 W Base::~Base()</span><br><span class="line">0000000000000de0 W Derived::~Derived()</span><br><span class="line">0000000000000dd0 W Derived::~Derived()</span><br><span class="line">0000000000000dd0 W Derived::~Derived()</span><br><span class="line">0000000000000d50 T Base::f() const</span><br><span class="line">                 U Base::<span class="built_in">print</span>(std::ostream&amp;) const</span><br><span class="line">0000000000000db0 T Derived::<span class="built_in">print</span>(std::ostream&amp;) const</span><br><span class="line">0000000000201038 V typeinfo <span class="keyword">for</span> Base</span><br><span class="line">0000000000201078 V typeinfo <span class="keyword">for</span> Derived</span><br><span class="line">0000000000000e68 V typeinfo name <span class="keyword">for</span> Base</span><br><span class="line">0000000000000e78 V typeinfo name <span class="keyword">for</span> Derived</span><br><span class="line">0000000000201048 V vtable <span class="keyword">for</span> Base</span><br><span class="line">0000000000201090 V vtable <span class="keyword">for</span> Derived</span><br></pre></td></tr></table></figure>
+
+<p>可见，这里 <code>U</code> 不再是符号表，而是虚函数本身。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>C++ 的 unsolved symbol 问题其实挺常见的，即使是踩过 N 次坑的我也容易因为一点失误而犯错。本文主要讲述了通过 <code>nm</code> 排查问题的方式，其中如果只有 <code>vtable</code>&#x2F;<code>typeinfo</code> 缺失这种难以排查的信息，可以尝试加一个带实现的虚函数（比如前文的 <code>f</code>），再来排查符号表。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/" rel="prev" title="链接选项 rpath 的应用和原理">
+      <i class="fa fa-chevron-left"></i> 链接选项 rpath 的应用和原理
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/09/03/Linux-C-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D-SIGKILL-%E9%97%AE%E9%A2%98/" rel="next" title="Linux C++ 内存分配 SIGKILL 问题">
+      Linux C++ 内存分配 SIGKILL 问题 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9F%BA%E6%9C%AC%E7%9F%A5%E8%AF%86%E5%9B%9E%E9%A1%BE%EF%BC%9A%E6%B5%81%E8%BF%90%E7%AE%97%E7%AC%A6%E9%87%8D%E8%BD%BD"><span class="nav-number">2.</span> <span class="nav-text">基本知识回顾：流运算符重载</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%A7%E6%89%BF%E4%BD%93%E7%B3%BB%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E5%BC%8F%E4%BB%A5%E5%8F%8A-vtable-%E4%BF%A1%E6%81%AF%E7%BC%BA%E5%A4%B1%E9%97%AE%E9%A2%98"><span class="nav-number">3.</span> <span class="nav-text">继承体系的解决方式以及 vtable 信息缺失问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="nav-number">4.</span> <span class="nav-text">问题排查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%BF%BD%E6%A0%B9%E6%BA%AF%E6%BA%90"><span class="nav-number">5.</span> <span class="nav-text">追根溯源</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A4%8D%E7%8E%B0"><span class="nav-number">5.1.</span> <span class="nav-text">复现</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9F%A5%E7%9C%8B%E7%AC%A6%E5%8F%B7%E8%A1%A8"><span class="nav-number">5.2.</span> <span class="nav-text">查看符号表</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BC%98%E5%8C%96%E4%B8%80%E4%B8%8B%EF%BC%9F"><span class="nav-number">5.3.</span> <span class="nav-text">优化一下？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#name-mangling-%E8%BF%98%E5%8E%9F"><span class="nav-number">5.4.</span> <span class="nav-text">name mangling 还原</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BA%E4%BD%95%E6%9E%90%E6%9E%84%E5%87%BD%E6%95%B0%E7%9A%84%E7%AC%A6%E5%8F%B7%E6%9C%89%E6%97%A0%E4%BC%9A%E5%AF%BC%E8%87%B4%E7%BB%93%E6%9E%9C%E5%8F%98%E5%8C%96"><span class="nav-number">5.5.</span> <span class="nav-text">为何析构函数的符号有无会导致结果变化</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

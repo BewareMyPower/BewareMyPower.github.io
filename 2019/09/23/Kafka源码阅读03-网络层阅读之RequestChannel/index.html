@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="回顾前2篇分析了SocketServer的启动以及Acceptor&#x2F;Processor，对配置listener的网络地址，都会创建1个Acceptor和N个Processor，其中N为配置num.network.thread。每个Acceptor会创建1个默认的NIO Selector，每个Processor则都会创建1个Kafka自行实现Selector接口的KSelector。 so">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读03: 网络层阅读之RequestChannel">
+<meta property="og:url" content="http://yoursite.com/2019/09/23/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB03-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BRequestChannel/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="回顾前2篇分析了SocketServer的启动以及Acceptor&#x2F;Processor，对配置listener的网络地址，都会创建1个Acceptor和N个Processor，其中N为配置num.network.thread。每个Acceptor会创建1个默认的NIO Selector，每个Processor则都会创建1个Kafka自行实现Selector接口的KSelector。 so">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-09-23T12:01:56.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.218Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/09/23/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB03-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BRequestChannel/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读03: 网络层阅读之RequestChannel | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/09/23/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB03-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BRequestChannel/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读03: 网络层阅读之RequestChannel
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-09-23 20:01:56" itemprop="dateCreated datePublished" datetime="2019-09-23T20:01:56+08:00">2019-09-23</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h2><p>前2篇分析了<code>SocketServer</code>的启动以及<code>Acceptor</code>&#x2F;<code>Processor</code>，对配置<code>listener</code>的网络地址，都会创建1个<code>Acceptor</code>和N个<code>Processor</code>，其中N为配置<code>num.network.thread</code>。每个<code>Acceptor</code>会创建1个默认的NIO <code>Selector</code>，每个<code>Processor</code>则都会创建1个Kafka自行实现<code>Selector</code>接口的<code>KSelector</code>。</p>
+<p>socket都会被封装成<code>Channel</code>，即通道，代表socket两端的连接。<code>Acceptor</code>会创建一个<code>Channel</code>监听网络地址，并在其<code>Selector</code>注册读事件，然后负责将所有客户端的连接转换成<code>Channel</code>均衡地发送给<code>Processor</code>。</p>
+<p><code>Processor</code>则在其<code>Selector</code>上注册从<code>Acceptor</code>收到的<code>Channel</code>的读&#x2F;写&#x2F;关闭连接等事件，并分别处理。但是<code>Processor</code>只负责读取请求(Request)和写入响应(Response)，对于已完成的请求，会将其作为参数传给<code>requestChannel</code>调用<code>sendRequest()</code>。另一方面，<code>Processor</code>内部的响应队列，则是由<code>requestChannel</code>调用<code>sendResponse()</code>得到的。</p>
+<p>而<code>RequestChannel</code>包含<code>requestQueue</code>字段缓存请求，另外它也和<code>SocketServer</code>一样保存了所有<code>Processor</code>的id和自身组成的<code>ConcurrentHashMap</code>。</p>
+<h2 id="处理请求"><a href="#处理请求" class="headerlink" title="处理请求"></a>处理请求</h2><h3 id="发送请求"><a href="#发送请求" class="headerlink" title="发送请求"></a>发送请求</h3><p>在<code>Processor.processCompletedReceives()</code>方法中，会将封装了网络地址信息的请求传递给<code>sendRequest()</code>方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> header = <span class="type">RequestHeader</span>.parse(receive.payload)</span><br><span class="line"><span class="keyword">val</span> context = <span class="keyword">new</span> <span class="type">RequestContext</span>(header, receive.source, channel.socketAddress,</span><br><span class="line">  channel.principal, listenerName, securityProtocol)</span><br><span class="line"><span class="keyword">val</span> req = <span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Request</span>(processor = id, context = context,</span><br><span class="line">  startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)</span><br><span class="line">requestChannel.sendRequest(req)</span><br></pre></td></tr></table></figure>
+
+<p><code>sendRequest()</code>方法的实现：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 发送待处理的请求, requestQueue 有容量上限, 由 queue.max.requests 配置, 若达到了上限则会阻塞。</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendRequest</span></span>(request: <span class="type">RequestChannel</span>.<span class="type">Request</span>) &#123;</span><br><span class="line">  requestQueue.put(request)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>“发送”只是将请求放到了内部的请求队列中，而出队方法是在<code>server.KafkaRequestHandler</code>中调用的，不属于网络层的事情，暂时不管。因此看看<code>Request</code>类型的构造，传入了<code>header</code>和<code>context</code>。</p>
+<h3 id="请求头的解析"><a href="#请求头的解析" class="headerlink" title="请求头的解析"></a>请求头的解析</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> RequestHeader <span class="title function_">parse</span><span class="params">(ByteBuffer buffer)</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 前2个字节为 Api Key, 代表请求的类型</span></span><br><span class="line">        <span class="type">short</span> <span class="variable">apiKey</span> <span class="operator">=</span> buffer.getShort();</span><br><span class="line">        <span class="comment">// 后2个字节为 Api Version, 即客户端使用的API版本</span></span><br><span class="line">        <span class="type">short</span> <span class="variable">apiVersion</span> <span class="operator">=</span> buffer.getShort();</span><br><span class="line">        <span class="comment">// 通过上述字段创建 Schema 对象, 即完整的消息头</span></span><br><span class="line">        <span class="type">Schema</span> <span class="variable">schema</span> <span class="operator">=</span> schema(apiKey, apiVersion);</span><br><span class="line">        <span class="comment">// ByteBuffer.getXXX() 会修改内部偏移量, 因此需要将偏移量重置为最开始以便从头读取 buffer</span></span><br><span class="line">        <span class="comment">// 从头读取 buffer, 进而用 scheme.read() 构造请求头</span></span><br><span class="line">        buffer.rewind();</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">RequestHeader</span>(schema.read(buffer));</span><br><span class="line">    &#125;  <span class="comment">// 异常处理(略)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Api Key的类型参考<a target="_blank" rel="noopener" href="https://kafka.apache.org/protocol.html#protocol_api_keys">Api Key</a>，消息协议类型参考<a target="_blank" rel="noopener" href="https://kafka.apache.org/protocol.html#protocol_messages">消息协议</a>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Request Header =&gt; api_key api_version correlation_id client_id </span><br><span class="line">  api_key =&gt; INT16</span><br><span class="line">  api_version =&gt; INT16</span><br><span class="line">  correlation_id =&gt; INT32</span><br><span class="line">  client_id =&gt; NULLABLE_STRING</span><br></pre></td></tr></table></figure>
+
+<p>这个头部即<code>Schema</code>类，其<code>read()</code>方法会把后面的correlation id和client id给读入，构造消息头。</p>
+<h3 id="请求上下文的构造"><a href="#请求上下文的构造" class="headerlink" title="请求上下文的构造"></a>请求上下文的构造</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> context = <span class="keyword">new</span> <span class="type">RequestContext</span>(header, receive.source, channel.socketAddress,  channel.principal,</span><br><span class="line">                                 listenerName, securityProtocol)</span><br></pre></td></tr></table></figure>
+
+<p>其实就是简单地将对应参数赋值给内部字段：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> RequestHeader header;  <span class="comment">// 消息头</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> String connectionId; <span class="comment">// 连接id，包含本地和远程的地址和表示连接的index</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> InetAddress clientAddress; <span class="comment">// 客户端地址</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> KafkaPrincipal principal; <span class="comment">// Channel的principal字段，用于信息认证</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> ListenerName listenerName; <span class="comment">// 配置 listeners 的名字部分(比如PLAINTEXT) </span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> SecurityProtocol securityProtocol; <span class="comment">// 安全协议, 根据listenerName解析的</span></span><br></pre></td></tr></table></figure>
+
+<p>消息头上一小节刚看完，连接id也是阅读源码至今一直见到的用于标识一条TCP连接的字符串，最后2个字段均为解析<code>listener</code>配置时解析出的<code>EndPoint</code>类的字段。</p>
+<h3 id="请求对象的创建"><a href="#请求对象的创建" class="headerlink" title="请求对象的创建"></a>请求对象的创建</h3><p><code>RequestChannel.Request</code>字段比较多就不一一解释了（很多都是metric相关的），核心是请求body（0.10版本是字段现在是方法）：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">body</span></span>[<span class="type">T</span> &lt;: <span class="type">AbstractRequest</span>](<span class="keyword">implicit</span> classTag: <span class="type">ClassTag</span>[<span class="type">T</span>], nn: <span class="type">NotNothing</span>[<span class="type">T</span>]): <span class="type">T</span> = &#123;</span><br><span class="line">  bodyAndSize.request <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> r: <span class="type">T</span> =&gt; r</span><br><span class="line">    <span class="keyword">case</span> r =&gt;</span><br><span class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">ClassCastException</span>(<span class="string">s&quot;Expected request with type <span class="subst">$&#123;classTag.runtimeClass&#125;</span>, but found <span class="subst">$&#123;r.getClass&#125;</span>&quot;</span>)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>该方法仅仅是检查请求类型T是否合法，若不合法则抛出异常。</p>
+<p>关键部分是<code>bodyAndSize</code>进行类型匹配，该字段初始化：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> bodyAndSize: <span class="type">RequestAndSize</span> = context.parseRequest(buffer)</span><br></pre></td></tr></table></figure>
+
+<p><code>context</code>解析请求的方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> RequestAndSize <span class="title function_">parseRequest</span><span class="params">(ByteBuffer buffer)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (isUnsupportedApiVersionsRequest()) &#123;</span><br><span class="line">        <span class="comment">// 未支持的 ApiVersion 被视为v0请求并且不被处理</span></span><br><span class="line">        <span class="type">ApiVersionsRequest</span> <span class="variable">apiVersionsRequest</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ApiVersionsRequest</span>((<span class="type">short</span>) <span class="number">0</span>, header.apiVersion());</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">RequestAndSize</span>(apiVersionsRequest, <span class="number">0</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="type">ApiKeys</span> <span class="variable">apiKey</span> <span class="operator">=</span> header.apiKey();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="type">short</span> <span class="variable">apiVersion</span> <span class="operator">=</span> header.apiVersion();</span><br><span class="line">            <span class="comment">// 根据API版本将字节缓存解析成Struct的各个字段</span></span><br><span class="line">            <span class="type">Struct</span> <span class="variable">struct</span> <span class="operator">=</span> apiKey.parseRequest(apiVersion, buffer);</span><br><span class="line">            <span class="comment">// 根据请求类型/API版本/Struct字段创建实际的请求类型</span></span><br><span class="line">            <span class="type">AbstractRequest</span> <span class="variable">body</span> <span class="operator">=</span> AbstractRequest.parseRequest(apiKey, apiVersion, struct);</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">RequestAndSize</span>(body, struct.sizeOf());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Throwable ex) &#123;</span><br><span class="line">            <span class="comment">// 异常处理(略)</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 类 AbstractRequest 的方法</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> AbstractRequest <span class="title function_">parseRequest</span><span class="params">(ApiKeys apiKey, <span class="type">short</span> apiVersion, Struct struct)</span> &#123;</span><br><span class="line">    <span class="keyword">switch</span> (apiKey) &#123;</span><br><span class="line">        <span class="keyword">case</span> PRODUCE: </span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">ProduceRequest</span>(struct, apiVersion);</span><br><span class="line">        <span class="keyword">case</span> FETCH:</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">FetchRequest</span>(struct, apiVersion);</span><br><span class="line">        <span class="comment">// 其他类型的请求...(略)</span></span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="comment">// 异常处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这部分代码都是Java实现的，为了能根据不同请求类型&#x2F;API版本得到对应的请求类型的示例，实现得较为复杂，细节也不深入去看，总之，在Kafka中可以像这样调用<code>body()</code>方法得到实际的请求对象：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将请求的 ByteBuffer 解析成 MetadataRequest 对象</span></span><br><span class="line"><span class="keyword">val</span> metadataRequest = request.body[<span class="type">MetadataRequest</span>]</span><br></pre></td></tr></table></figure>
+
+<h3 id="取出请求"><a href="#取出请求" class="headerlink" title="取出请求"></a>取出请求</h3><p>之前介绍了<code>Processor</code>仅仅是将请求加入阻塞队列<code>requestQueue</code>中，那么何时取出呢？找到其<code>poll()</code>方法的调用处：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 取得下个请求, 或者阻塞直到超时</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">receiveRequest</span></span>(timeout: <span class="type">Long</span>): <span class="type">RequestChannel</span>.<span class="type">BaseRequest</span> =</span><br><span class="line">  requestQueue.poll(timeout, <span class="type">TimeUnit</span>.<span class="type">MILLISECONDS</span>)</span><br></pre></td></tr></table></figure>
+
+<p>再看看上述方法的调用处：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 类 KafkaRequestHandler 的方法</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</span><br><span class="line">  <span class="keyword">while</span> (!stopped) &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="keyword">val</span> req = requestChannel.receiveRequest(<span class="number">300</span>) <span class="comment">// 300ms超时</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    req <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">ShutdownRequest</span> =&gt;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">      <span class="keyword">case</span> request: <span class="type">RequestChannel</span>.<span class="type">Request</span> =&gt;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">      <span class="keyword">case</span> <span class="literal">null</span> =&gt; <span class="comment">// continue</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于是API层的代码，所以略去了其他代码，只保留了<code>req</code>相关的。可以看到请求<code>Handler</code>线程会反复地从请求队列中取出请求，然后根据请求地类型进行不同处理。</p>
+<h3 id="多线程取出请求安全吗？"><a href="#多线程取出请求安全吗？" class="headerlink" title="多线程取出请求安全吗？"></a>多线程取出请求安全吗？</h3><p>由于<code>ArrayBlockingQueue</code>是线程安全的，所以多个<code>Handler</code>线程从中取出请求是线程安全的。另一方面，关于顺序性，即来自同一个客户端的多个请求，必须保证取出的顺序也一致。《Apache Kafka源码剖析》书上给出了解释：<code>Processor.run()</code>方法通过多处注册&#x2F;取消 读&#x2F;写事件 来保证每个连接上只有一个请求和一个对应的响应来实现的。</p>
+<p>具体而言，可以回顾我上一篇源码分析中<code>Processor</code>的部分：</p>
+<ol>
+<li>在<code>processCompletedReceives()</code>中，一旦接收到完整的请求<code>req</code>，在调用<code>sendRequest(req)</code>后会取消监听该<code>Channel</code>的读事件；</li>
+<li>在<code>processCompleteSends()</code>中，只有当响应成功返回客户端（将响应从缓存的<code>inflightResponses</code>移除）后，才会重新注册该<code>Channel</code>的读事件；</li>
+<li>在<code>processNewResponses()</code>中判断请求类型是<code>SendAction</code>时，会注册<code>Channel</code>的写事件；</li>
+<li>在<code>poll()</code>中向底层socket发送数据时，如果判断数据完毕，则会取消注册<code>Channel</code>的写事件。</li>
+</ol>
+<h2 id="处理响应"><a href="#处理响应" class="headerlink" title="处理响应"></a>处理响应</h2><p><code>Processor</code>自己维护了响应队列，并在<code>processNewResponses()</code>中调用<code>dequeueResponse()</code>方法依次出队， 那么，可以找到其对应方法<code>enqueueResponse()</code>的调用处：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendResponse</span></span>(response: <span class="type">RequestChannel</span>.<span class="type">Response</span>) &#123;</span><br><span class="line">  <span class="keyword">if</span> (isTraceEnabled) &#123;</span><br><span class="line">    <span class="comment">// 判断响应类型并打印日志(略)</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">val</span> processor = processors.get(response.processor)</span><br><span class="line">  <span class="comment">// 如果 processor 已经关闭了, 可能会被移出 processors (此时返回null), 因此直接丢掉响应</span></span><br><span class="line">  <span class="keyword">if</span> (processor != <span class="literal">null</span>) &#123;</span><br><span class="line">    processor.enqueueResponse(response)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>值得注意的是这里对<code>processor != null</code>的判断，Kafka 1.1.0的<code>SocketServer</code>支持<code>resizeThreadPoll()</code>方法来改变网络线程数量（也就是<code>Acceptor</code>对应<code>Processor</code>的数量），如果网络线程数减少的话，那么多出的<code>Processor</code>会调用<code>shutdown()</code>方法关闭，并通过<code>connectionId</code>将其从<code>Acceptor</code>和<code>RequestChannel</code>中的<code>processors</code>字段移除。</p>
+<p>继续找到该方法的调用处，位于<code>KafkaApis</code>的<code>sendResponse()</code>方法中：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">sendResponse</span></span>(request: <span class="type">RequestChannel</span>.<span class="type">Request</span>, responseOpt: <span class="type">Option</span>[<span class="type">AbstractResponse</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="comment">// 更新metrics(略)</span></span><br><span class="line"></span><br><span class="line">  responseOpt <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">Some</span>(response) =&gt;</span><br><span class="line">      <span class="keyword">val</span> responseSend = request.context.buildResponse(response)</span><br><span class="line">      <span class="keyword">val</span> responseString =</span><br><span class="line">        <span class="keyword">if</span> (<span class="type">RequestChannel</span>.isRequestLoggingEnabled) <span class="type">Some</span>(response.toString(request.context.apiVersion))</span><br><span class="line">        <span class="keyword">else</span> <span class="type">None</span></span><br><span class="line">      requestChannel.sendResponse(<span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Response</span>(request, <span class="type">Some</span>(responseSend), <span class="type">SendAction</span>, responseString))</span><br><span class="line">    <span class="keyword">case</span> <span class="type">None</span> =&gt;</span><br><span class="line">      requestChannel.sendResponse(<span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Response</span>(request, <span class="type">None</span>, <span class="type">NoOpAction</span>, <span class="type">None</span>))</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时<code>RequestChannel</code>只是将响应转发给了<code>Processor</code>，它本身并不维护响应队列（在0.10.0.1版本中则是维护了多个响应队列），真正维护响应队列的是<code>Processor</code>本身。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>关于Kafka网络层的阅读至此就告一段落，不得不说但作为Kafka的基础设施的Java NIO实现的部分更为复杂（<code>KafkaChannel</code>和<code>KafkaSelector</code>），但阅读源码不应太陷入细节（感觉我已经有些陷进去了……）。对于Kafka，最重要的还是它的业务层，也就是对<a target="_blank" rel="noopener" href="https://kafka.apache.org/protocol.html">Kafka协议</a>的实现。</p>
+<p><code>RequestChannel</code>的作用很简单：</p>
+<ul>
+<li>维护请求队列，接收来自<code>Processor</code>的请求，并转发给<code>KafkaRequestHandler</code>进行处理；</li>
+<li>从<code>KafkaApis</code>获取响应，发送给<code>Processor</code>。</li>
+</ul>
+<p>加上文章开始总结的<code>Acceptor</code>&#x2F;<code>Processor</code>，以及统筹全局的<code>SocketServer</code>，构成了Kafka的网络层，简单描述：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">|             Network Layer                 |       API Layer        |</span><br><span class="line">| Acceptor -&gt; Processors &lt;-&gt; RequestChannel | -&gt; KafkaRequestHandler |</span><br><span class="line">|                                           | &lt;- KafkaApis           |</span><br><span class="line">| Client -&gt; SocketChannel -&gt; Acceptor       |                        |</span><br><span class="line">| Client &lt;-&gt; KafkaChannel &lt;-&gt; Processor     |                        |</span><br></pre></td></tr></table></figure>
+
+<p>可以发现不管是什么<code>Channel</code>，都是起到了连接的作用。<code>Acceptor</code>通过最简单的<code>SocketChannel</code>与监听套接字连接，监听连接事件，并将接受的连接转发给<code>Processor</code>，之后<code>Processor</code>通过比较复杂的<code>KafkaChannel</code>与客户端连接，监听读&#x2F;写事件并和客户端进行数据的交互。</p>
+<p>数据分为来自客户端的请求和来自服务端的响应，<code>Processor</code>不负责这部分，而是通过<code>RequestChannel</code>将请求发送给<code>KafkaRequestHandler</code>，再从<code>RequestChannel</code>接收响应。</p>
+<p>问题来了，而实际发送响应给<code>RequestChannel</code>的却是<code>KafkaApis</code>，因此<strong>请求</strong>&#x3D;&gt;<strong>响应</strong>的过程是由它们共同完成的，也就是接下来要阅读的API层。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/" rel="prev" title="Kafka源码阅读02: 网络层阅读之Acceptor和Processor">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读02: 网络层阅读之Acceptor和Processor
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/10/08/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB04-API%E5%B1%82%E4%B9%8BHandler%E5%92%8CApis/" rel="next" title="Kafka源码阅读04-API层之Handler和Apis">
+      Kafka源码阅读04-API层之Handler和Apis <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9B%9E%E9%A1%BE"><span class="nav-number">1.</span> <span class="nav-text">回顾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A4%84%E7%90%86%E8%AF%B7%E6%B1%82"><span class="nav-number">2.</span> <span class="nav-text">处理请求</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%91%E9%80%81%E8%AF%B7%E6%B1%82"><span class="nav-number">2.1.</span> <span class="nav-text">发送请求</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E5%A4%B4%E7%9A%84%E8%A7%A3%E6%9E%90"><span class="nav-number">2.2.</span> <span class="nav-text">请求头的解析</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E4%B8%8A%E4%B8%8B%E6%96%87%E7%9A%84%E6%9E%84%E9%80%A0"><span class="nav-number">2.3.</span> <span class="nav-text">请求上下文的构造</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%9B%E5%BB%BA"><span class="nav-number">2.4.</span> <span class="nav-text">请求对象的创建</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%96%E5%87%BA%E8%AF%B7%E6%B1%82"><span class="nav-number">2.5.</span> <span class="nav-text">取出请求</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%8F%96%E5%87%BA%E8%AF%B7%E6%B1%82%E5%AE%89%E5%85%A8%E5%90%97%EF%BC%9F"><span class="nav-number">2.6.</span> <span class="nav-text">多线程取出请求安全吗？</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A4%84%E7%90%86%E5%93%8D%E5%BA%94"><span class="nav-number">3.</span> <span class="nav-text">处理响应</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

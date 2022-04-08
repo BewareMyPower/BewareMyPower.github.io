@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="简介hexo的安装还是很简单的，操作也很傻瓜式。常用的基本就下面几个命令  hexo ss即server，默认在localhost:4000启动服务器，在浏览器中即可看到效果，可以通过-p选项指定端口。 hexo dd即deploy(部署)，上传到服务器。一般会加上-g选项在本地生成静态文件。如果不上传服务器，可以直接hexo g生成静态文件。 hexo clean删除本地md文件后如果不clea">
+<meta property="og:type" content="article">
+<meta property="og:title" content="hexo多终端同步">
+<meta property="og:url" content="http://yoursite.com/2018/10/15/hexo%E5%A4%9A%E7%BB%88%E7%AB%AF%E5%90%8C%E6%AD%A5/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="简介hexo的安装还是很简单的，操作也很傻瓜式。常用的基本就下面几个命令  hexo ss即server，默认在localhost:4000启动服务器，在浏览器中即可看到效果，可以通过-p选项指定端口。 hexo dd即deploy(部署)，上传到服务器。一般会加上-g选项在本地生成静态文件。如果不上传服务器，可以直接hexo g生成静态文件。 hexo clean删除本地md文件后如果不clea">
+<meta property="og:locale">
+<meta property="og:image" content="http://yoursite.com/master%E5%88%86%E6%94%AF%E7%9B%AE%E5%BD%95.jpg">
+<meta property="og:image" content="http://yoursite.com/hexo%E5%88%86%E6%94%AF%E7%9B%AE%E5%BD%95.jpg">
+<meta property="article:published_time" content="2018-10-15T12:07:19.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.228Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="搭环境">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/master%E5%88%86%E6%94%AF%E7%9B%AE%E5%BD%95.jpg">
+
+<link rel="canonical" href="http://yoursite.com/2018/10/15/hexo%E5%A4%9A%E7%BB%88%E7%AB%AF%E5%90%8C%E6%AD%A5/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>hexo多终端同步 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/10/15/hexo%E5%A4%9A%E7%BB%88%E7%AB%AF%E5%90%8C%E6%AD%A5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          hexo多终端同步
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-10-15 20:07:19" itemprop="dateCreated datePublished" datetime="2018-10-15T20:07:19+08:00">2018-10-15</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>hexo的安装还是很简单的，操作也很傻瓜式。常用的基本就下面几个命令</p>
+<ol>
+<li><code>hexo s</code><br>s即server，默认在<code>localhost:4000</code>启动服务器，在浏览器中即可看到效果，可以通过<code>-p</code>选项指定端口。</li>
+<li><code>hexo d</code><br>d即deploy(部署)，上传到服务器。一般会加上<code>-g</code>选项在本地生成静态文件。如果不上传服务器，可以直接<code>hexo g</code>生成静态文件。</li>
+<li><code>hexo clean</code><br>删除本地md文件后如果不clean后重新生成，首页可能不会更新。</li>
+<li><code>hexo new</code><br>新建博客，后接博客名，比如<code>hexo new &quot;test&quot;</code>，此时hexo框架就会自动生成md文件。自动新建的md文件会生成一些模板信息，因此最好使用命令新建博客。生成之后，用vim等本地编辑器修改即可。<br>另外在<code>_config.yml</code>设置<code>post_asset_folder</code>为true，则<code>hexo new</code>会新建md文件的同名目录用来存放图片，并且作为图片的默认路径，也就是说如果待插入图片放在该目录下，路径直接写文件名即可。</li>
+</ol>
+<p>至于其他命令可以参考<a target="_blank" rel="noopener" href="https://hexo.io/zh-cn/docs/commands.html">hexo中文文档</a>，<code>_config.yml</code>的配置也有较为详细地注释。</p>
+<h2 id="新建分支保存源码"><a href="#新建分支保存源码" class="headerlink" title="新建分支保存源码"></a>新建分支保存源码</h2><p>hexo是将Markdown文本和图片生成静态网页上传至github的。<br><img src="/master%E5%88%86%E6%94%AF%E7%9B%AE%E5%BD%95.jpg" alt="master分支目录"></p>
+<p>上图所示目录即<code>hexo d -g</code>或<code>hexo g</code>在本地生成的静态文件，为<code>public</code>子目录。<code>hexo d</code>即上传该目录到仓库master分支。<br>而博客目录是保存在<code>source/_posts</code>目录下的，因此需要在git仓库中新建一个分支保存博客源文件。创建过程如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">git init</span><br><span class="line">git add source themes _config.yml package.json</span><br><span class="line">git commit -m &quot;blog source&quot;</span><br><span class="line">git branch hexo</span><br><span class="line">git checkout hexo</span><br><span class="line">git remote add origin git@github.com:BewareMyPower/BewareMyPower.github.io.git</span><br><span class="line">git push origin hexo</span><br></pre></td></tr></table></figure>
+<p>普通的git命令，初始化、添加、提交、创建分支、切换分支、添加远程仓库、推送分支到该仓库。完成后远程仓库hexo分支如下图所示。<br><img src="/hexo%E5%88%86%E6%94%AF%E7%9B%AE%E5%BD%95.jpg" alt="hexo分支目录"></p>
+<h2 id="新环境下部署博客并添加新博客"><a href="#新环境下部署博客并添加新博客" class="headerlink" title="新环境下部署博客并添加新博客"></a>新环境下部署博客并添加新博客</h2><p>首先克隆源码分支。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git clone -b hexo git@github.com:BewareMyPower/BewareMyPower.github.io.git</span><br></pre></td></tr></table></figure>
+<p>由于hexo分支仅仅是源码，缺少了将源码转换成网页的nodejs模块(即hexo)，所以需要安装hexo在该目录。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cd BewareMyPower.github.io/</span><br><span class="line">npm install hexo</span><br><span class="line">npm install</span><br></pre></td></tr></table></figure>
+<p>然后会发现目录下多了个<code>node_modules</code>目录，即保存nodejs相关模块。<br>注意后面一个<code>npm install</code>不可少！否则会缺少某些模块，比如缺少hexo-asset-image模块导致图片无法显示。<br>此外无论是生成静态文件还是启动服务器，源码目录不受影响，因此可以放心大胆地操作。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo new &quot;hexo多终端同步.md&quot;</span><br></pre></td></tr></table></figure>
+<p>边修改边<code>hexo s</code>查看效果，直到修改完毕，便可以上传了，当然，也是分为上传源码到hexo分支和上传编译后静态文件到master分支这两步。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">git add source/_post/多终端同步.md source/_posts/hexo多终端同步</span><br><span class="line">git commit &quot;new blog&quot;</span><br><span class="line">git push origin hexo</span><br><span class="line">hexo d</span><br></pre></td></tr></table></figure>
+
+<h2 id="其他问题"><a href="#其他问题" class="headerlink" title="其他问题"></a>其他问题</h2><p>之前在阿里云上<code>hexo init</code>出错</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&gt; nunjucks@3.1.3 postinstall /root/hexo/node_modules/nunjucks</span><br><span class="line">&gt; node postinstall-build.js src</span><br><span class="line"></span><br><span class="line">sh: 1: node: Permission denied</span><br></pre></td></tr></table></figure>
+<p>原因是我是root用户，而<code>npm</code>的默认用户ID是500，因此要设为0。可以直接修改<code>.npmrc</code>文件，也可以<code>npm config</code>命令修改：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">~# npm config set user 0</span><br><span class="line">~# npm config set unsafe-perm true</span><br><span class="line">~# cat .npmrc</span><br><span class="line">user=0</span><br><span class="line">unsafe-perm=true</span><br></pre></td></tr></table></figure>
+<p>hexo博客置顶需要修改npm模块代码，修改<code>node_modules/hexo-generator-index/lib/generator.js</code>如下，按照top值排序</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">&#x27;use strict&#x27;;</span><br><span class="line"></span><br><span class="line">var pagination = require(&#x27;hexo-pagination&#x27;);</span><br><span class="line"></span><br><span class="line">module.exports = function(locals) &#123;</span><br><span class="line">  var config = this.config;</span><br><span class="line">  var posts = locals.posts.sort(config.index_generator.order_by);</span><br><span class="line"></span><br><span class="line">  posts.data = posts.data.sort(function(a, b) &#123;</span><br><span class="line">      if(a.top &amp;&amp; b.top) &#123;</span><br><span class="line">          if(a.top == b.top) return b.date - a.date;</span><br><span class="line">          else return b.top - a.top;</span><br><span class="line">      &#125;</span><br><span class="line">      else if(a.top &amp;&amp; !b.top) &#123;</span><br><span class="line">          return -1;</span><br><span class="line">      &#125;</span><br><span class="line">      else if(!a.top &amp;&amp; b.top) &#123;</span><br><span class="line">          return 1;</span><br><span class="line">      &#125;</span><br><span class="line">      else return b.date - a.date;</span><br><span class="line">  &#125;);</span><br><span class="line"></span><br><span class="line">  var paginationDir = config.pagination_dir || &#x27;page&#x27;;</span><br><span class="line"></span><br><span class="line">  return pagination(&#x27;&#x27;, posts, &#123;</span><br><span class="line">    perPage: config.index_generator.per_page,</span><br><span class="line">    layout: [&#x27;index&#x27;, &#x27;archive&#x27;],</span><br><span class="line">    format: paginationDir + &#x27;/%d/&#x27;,</span><br><span class="line">    data: &#123;</span><br><span class="line">      __index: true</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>比如我这篇博客的top设置为0。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">---</span><br><span class="line">title: hexo多终端同步</span><br><span class="line">date: 2018-10-15 20:07:19</span><br><span class="line">tags: 搭环境</span><br><span class="line">top: 0</span><br><span class="line">---</span><br></pre></td></tr></table></figure>
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag"># 搭环境</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/09/05/%E7%94%9F%E6%88%90%E5%AD%97%E5%85%B8%E5%BA%8F%E7%9A%84%E5%85%A8%E6%8E%92%E5%88%97%E7%AE%97%E6%B3%95/" rel="prev" title="生成字典序的全排列算法">
+      <i class="fa fa-chevron-left"></i> 生成字典序的全排列算法
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/10/25/C%E6%A0%87%E5%87%86I-O%E5%BA%93%E8%87%AA%E5%AE%9A%E4%B9%89%E7%BC%93%E5%86%B2%E5%8C%BA/" rel="next" title="C标准I/O库自定义缓冲区">
+      C标准I/O库自定义缓冲区 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AE%80%E4%BB%8B"><span class="nav-number">1.</span> <span class="nav-text">简介</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%96%B0%E5%BB%BA%E5%88%86%E6%94%AF%E4%BF%9D%E5%AD%98%E6%BA%90%E7%A0%81"><span class="nav-number">2.</span> <span class="nav-text">新建分支保存源码</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%96%B0%E7%8E%AF%E5%A2%83%E4%B8%8B%E9%83%A8%E7%BD%B2%E5%8D%9A%E5%AE%A2%E5%B9%B6%E6%B7%BB%E5%8A%A0%E6%96%B0%E5%8D%9A%E5%AE%A2"><span class="nav-number">3.</span> <span class="nav-text">新环境下部署博客并添加新博客</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%B6%E4%BB%96%E9%97%AE%E9%A2%98"><span class="nav-number">4.</span> <span class="nav-text">其他问题</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

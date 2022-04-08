@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 简述目的是比较 NIO buffer（java.nio.ByteBuffer）和 Netty buffer（io.netty.buffer.ByteBuf）设计上的区别。因为刚好需要用 Netty 的 ByteBufAllocator 去重写 Kafka 的基于 NIO buffer 的 ByteBufferOutputStream，所以借此机会学习下两者的区别。 NIO buffer">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty-and-NIO-buffer">
+<meta property="og:url" content="http://yoursite.com/2021/08/21/Netty-and-NIO-buffer/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 简述目的是比较 NIO buffer（java.nio.ByteBuffer）和 Netty buffer（io.netty.buffer.ByteBuf）设计上的区别。因为刚好需要用 Netty 的 ByteBufAllocator 去重写 Kafka 的基于 NIO buffer 的 ByteBufferOutputStream，所以借此机会学习下两者的区别。 NIO buffer">
+<meta property="og:locale">
+<meta property="article:published_time" content="2021-08-20T16:19:40.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.225Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2021/08/21/Netty-and-NIO-buffer/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Netty-and-NIO-buffer | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2021/08/21/Netty-and-NIO-buffer/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Netty-and-NIO-buffer
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2021-08-21 00:19:40" itemprop="dateCreated datePublished" datetime="2021-08-21T00:19:40+08:00">2021-08-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="简述"><a href="#简述" class="headerlink" title="简述"></a>简述</h2><p>目的是比较 NIO buffer（<code>java.nio.ByteBuffer</code>）和 Netty buffer（<code>io.netty.buffer.ByteBuf</code>）设计上的区别。因为刚好需要用 Netty 的 <code>ByteBufAllocator</code> 去重写 Kafka 的基于 NIO buffer 的 <code>ByteBufferOutputStream</code>，所以借此机会学习下两者的区别。</p>
+<h2 id="NIO-buffer"><a href="#NIO-buffer" class="headerlink" title="NIO buffer"></a>NIO buffer</h2><p>参考文档：<a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/java/nio/ByteBuffer.html">https://docs.oracle.com/javase/8/docs/api/java/nio/ByteBuffer.html</a></p>
+<p>NIO buffer 的设计很简单，它是定长的，也就是必须在构造时指定容量，且不可扩容，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ByteBuffer</span> <span class="variable">buffer</span> <span class="operator">=</span> ByteBuffer.allocate(<span class="number">4</span>); <span class="comment">// 分配 4 字节容量堆内内存</span></span><br></pre></td></tr></table></figure>
+
+<p>每个 NIO buffer 有四个属性：</p>
+<ul>
+<li>mark：记录的位置</li>
+<li>position：当前读写位置</li>
+<li>limit：可读写字节的上界，初始值是 capacity</li>
+<li>capacity：容量</li>
+</ul>
+<p>这里暂时忽略 mark 属性。那么上述代码中，<code>buffer</code> 构造完成后各下标为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">position: 0, limit: 4, capacity: 4</span><br></pre></td></tr></table></figure>
+
+<p>可以用以下方法打印出来：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">printMetadata</span><span class="params">(<span class="keyword">final</span> ByteBuffer buffer)</span> &#123;</span><br><span class="line">    System.out.println(<span class="string">&quot;position: &quot;</span> + buffer.position() + <span class="string">&quot;, limit: &quot;</span> + buffer.limit()</span><br><span class="line">            + <span class="string">&quot;, capacity: &quot;</span> + buffer.capacity());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于 NIO buffer 是不可扩容的，所以理论上 <code>capacity</code> 不会改变。而 <code>position()</code> 和 <code>limit()</code> 方法都有另一个重载形式，可以接受一个 <code>int</code> 参数指定新的值。设置 <code>limit</code> 的场景大多是为了截断一个 buffer，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuffer</span> <span class="variable">buffer</span> <span class="operator">=</span> ByteBuffer.allocate(<span class="number">4</span>);</span><br><span class="line">buffer.putInt(<span class="number">0x11223344</span>); <span class="comment">// 0x11, 0x22, 0x33, 0x44</span></span><br><span class="line">printMetadata(buffer); <span class="comment">// position: 4, limit: 4, capacity: 4</span></span><br><span class="line">buffer.position(<span class="number">1</span>).limit(<span class="number">3</span>);</span><br><span class="line">printMetadata(buffer); <span class="comment">// position: 1, limit: 3, capacity: 4</span></span><br><span class="line">System.out.println(Integer.toHexString(buffer.getShort())); <span class="comment">// 2233</span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注：这里的设计没有采用 <code>setPosition()</code> 和 <code>setLimit()</code> 这样的命名方式，但是返回的都是 <code>ByteBuffer</code>，因此支持上述代码的链式调用方式。</p>
+</blockquote>
+<p>NIO buffer 提供 <code>put</code> 和 <code>get</code> 方法，两者都针对不同类型提供了多种类似方法，但大体分为两类，一类是不带 index 的，也就是直接从末尾写入或读取，一类是带 index 的，从 index 对应位置写入和读取。</p>
+<p>limit 属性则是 <code>get</code> 读写的上界，如果即将读取的字节位置已经超过了 limit，那么会抛出 <code>BufferOverflowException</code>（因为打破了 <code>position &lt;= limit</code> 的约束），比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuffer</span> <span class="variable">buffer</span> <span class="operator">=</span> ByteBuffer.allocate(<span class="number">2</span>);</span><br><span class="line">buffer.put((<span class="type">byte</span>) <span class="number">0x11</span>);</span><br><span class="line">printMetadata(buffer); <span class="comment">// position: 1, limit: 2, capacity: 2</span></span><br><span class="line"><span class="comment">// 写入的位置是 position + short size = 1 + 2 = 3 &gt; limit，因此抛出异常</span></span><br><span class="line">buffer.putShort((<span class="type">short</span>) <span class="number">0x2233</span>); </span><br></pre></td></tr></table></figure>
+
+<p>无论是 <code>get</code> 还是 <code>put</code>，都会改变 position，因为它们共用一个下标如果往末尾写入了新数据则会改变 limit。这里需要注意的是，读写共用一个下 position，这会导致一些反直觉的行为，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuffer</span> <span class="variable">buffer</span> <span class="operator">=</span> ByteBuffer.allocate(<span class="number">1</span>);</span><br><span class="line">buffer.put((<span class="type">byte</span>) <span class="number">0x11</span>);</span><br><span class="line">System.out.println(buffer.get()); <span class="comment">// BufferUnderflowException</span></span><br></pre></td></tr></table></figure>
+
+<p>直觉上第一次 <code>get()</code> 应该从 position 0 开始，但这里其实是从 position 1 开始，因为 <code>put</code> 改变了 position。如果要从 position 0 开始，只能在 <code>get()</code> 之前手动调用 <code>buffer.position(0)</code> 或者 <code>buffer.rewind()</code>。</p>
+<p>这里提到 <code>rewind</code>，它和 <code>position(0)</code> 的唯一区别是它将 <code>ByteBuffer</code> 的 <code>mark</code> 字段设置为了 -1。</p>
+<p>现在看看 mark，NIO buffer 永远满足约束： <code>mark &lt;= position &lt;= limit &lt;= capacity</code>。读&#x2F;写都会改变 position，写入可能改变 limit，而 capacity 无法改变。mark 属性仅在 <code>mark()</code> 方法中会设置为 -1 之外的值：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> Buffer <span class="title function_">mark</span><span class="params">()</span> &#123;</span><br><span class="line">    mark = position;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是记录当前的 position，主要用途是在 <code>put</code> 写入之前记下位置。<code>mark()</code> 方法要结合 <code>reset()</code> 方法使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> Buffer <span class="title function_">reset</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">m</span> <span class="operator">=</span> mark;</span><br><span class="line">    <span class="keyword">if</span> (m &lt; <span class="number">0</span>) <span class="comment">// 必须 mark() 设置过合法的 position，否则会抛出异常</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">InvalidMarkException</span>();</span><br><span class="line">    position = m;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这样可以方便回滚到写之前的位置进行读取，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuffer</span> <span class="variable">buffer</span> <span class="operator">=</span> ByteBuffer.allocate(<span class="number">2</span>);</span><br><span class="line">buffer.mark();</span><br><span class="line">buffer.put((<span class="type">byte</span>) <span class="number">0x11</span>);</span><br><span class="line">buffer.reset();</span><br><span class="line">System.out.println(Integer.toHexString(buffer.get())); <span class="comment">// 11</span></span><br><span class="line">buffer.mark();</span><br><span class="line">buffer.put((<span class="type">byte</span>) <span class="number">0x22</span>);</span><br><span class="line">buffer.reset();</span><br><span class="line">System.out.println(Integer.toHexString(buffer.get())); <span class="comment">// 22</span></span><br></pre></td></tr></table></figure>
+
+<p>如果是单纯的先写后读的场景，可以在写结束后调用 <code>flip()</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> Buffer <span class="title function_">flip</span><span class="params">()</span> &#123;</span><br><span class="line">    limit = position; <span class="comment">// 禁止写入更多字节，除非重新设置 limit</span></span><br><span class="line">    position = <span class="number">0</span>; <span class="comment">// 读写重新从 position 0 开始</span></span><br><span class="line">    mark = -<span class="number">1</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于读写都会改变 position，因此如果想要读写的同时不改变 position，可以调用 <code>duplicate()</code> 方法创建一个 buffer 共享数据，但是拥有独立的 position 以及其他属性，这些属性的初始值都是调用时原 buffer 的相应值。也可以用 <code>array()</code> 直接获取底层数组（下标 0 到 capacity）。</p>
+<h2 id="Netty-buffer"><a href="#Netty-buffer" class="headerlink" title="Netty buffer"></a>Netty buffer</h2><p>参考文档：<a target="_blank" rel="noopener" href="https://netty.io/4.1/api/io/netty/buffer/ByteBuf.html">https://netty.io/4.1/api/io/netty/buffer/ByteBuf.html</a></p>
+<h3 id="创建"><a href="#创建" class="headerlink" title="创建"></a>创建</h3><p>Netty buffer 支持使用 Netty 的 allocator 来分配内存，具体定制可参考 <a target="_blank" rel="noopener" href="https://netty.io/4.1/api/io/netty/buffer/ByteBufAllocator.html">Netty ByteBufAllocator</a>。也可以直接通过现有的 NIO buffer 或者字节数组构造。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf1</span> <span class="operator">=</span> Unpooled.wrappedBuffer(<span class="keyword">new</span> <span class="title class_">byte</span>[<span class="number">2</span>]);</span><br><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf2</span> <span class="operator">=</span> Unpooled.wrappedBuffer(ByteBuffer.allocate(<span class="number">2</span>));</span><br><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf3</span> <span class="operator">=</span> ByteBufAllocator.DEFAULT.buffer(<span class="number">2</span>);</span><br></pre></td></tr></table></figure>
+
+<p>其中，使用 <code>wrappedBuffer</code> 构造时，writer index 均为原来的 buffer&#x2F;数组的大小。</p>
+<h3 id="读写位置分离"><a href="#读写位置分离" class="headerlink" title="读写位置分离"></a>读写位置分离</h3><p>NIO buffer 的设计很简单，但是由于读写共用一个 position，导致使用起来不是很符合直觉，比如写完之后要重新调用 <code>position()</code> 设置位置，或者结合 <code>mark()</code> 和 <code>reset()</code>，或者 <code>flip()</code> 等等。</p>
+<p>而 Netty buffer 则将读写位置（这里称为 index 而非 position）分离了，见下图。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">+-------------------+------------------+------------------+</span><br><span class="line">| discardable bytes |  readable bytes  |  writable bytes  |</span><br><span class="line">|                   |     (CONTENT)    |                  |</span><br><span class="line">+-------------------+------------------+------------------+</span><br><span class="line">|                   |                  |                  |</span><br><span class="line">0      &lt;=      readerIndex   &lt;=   writerIndex    &lt;=    capacity</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>Discardable bytes：已经读取的区域</li>
+<li>Readable bytes：数据实际存储的位置</li>
+<li>Writable bytes：待填满的区域</li>
+</ul>
+<p>Netty buffer 将读写分为了两套 API，read&#x2F;write 系列方法类似于 NIO buffer 的 get&#x2F;put，读写成功会更新对应的 index。同时还支持指定 index 的 get&#x2F;set 系列方法用于随机读写，不会更新 index。另外，无论是 readerIndex 还是 writerIndex，Netty buffer 也提供了相应的 mark&#x2F;reset 系列方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf</span> <span class="operator">=</span> ByteBufAllocator.DEFAULT.buffer(<span class="number">2</span>);</span><br><span class="line">buf.writeByte(<span class="number">1</span>); <span class="comment">// readerIndex: 0, writerIndex: 1</span></span><br><span class="line">buf.writeByte(<span class="number">2</span>); <span class="comment">// readerIndex: 0, writerIndex: 2</span></span><br><span class="line">buf.readByte(); <span class="comment">// readerIndex: 1, writerIndex: 2</span></span><br><span class="line">buf.readByte(); <span class="comment">// readerIndex: 1, writerIndex: 2</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="扩容"><a href="#扩容" class="headerlink" title="扩容"></a>扩容</h3><p>NIO buffer 本质是对定长数组的包装，因此 capacity 是无法增长的，但是 Netty buffer 实现了自动扩容。这里可以先写个代码看看它的扩容策略。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf</span> <span class="operator">=</span> ByteBufAllocator.DEFAULT.buffer(<span class="number">1</span>);</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">500</span>; i++) &#123;</span><br><span class="line">    buf.writeByte(<span class="number">1</span>);</span><br><span class="line">    System.out.println(i + <span class="string">&quot; address: &quot;</span> + buf.memoryAddress() + <span class="string">&quot;, capacity: &quot;</span> + buf.capacity());</span><br><span class="line">&#125;</span><br><span class="line">buf.release();</span><br></pre></td></tr></table></figure>
+
+<p>可以看到输出是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">0 address: 140495611232256, capacity: 1</span><br><span class="line">1 address: 140495611232256, capacity: 16</span><br><span class="line">...</span><br><span class="line">16 address: 140495611240448, capacity: 64</span><br><span class="line">...</span><br><span class="line">64 address: 140495611248640, capacity: 128</span><br><span class="line">...</span><br><span class="line">128 address: 140495611256832, capacity: 256</span><br><span class="line">...</span><br><span class="line">256 address: 140495611265024, capacity: 512</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>这里不深究具体扩容策略，姑且看到 capacity 到达 64 之后就开始两倍扩容。这里主要看到，每次扩容之后内存地址发生了改变，对于连续存储的数据结构而言，基本都是这个实现套路。</p>
+<p>但是，注意这里我们是用 <code>ByteBufAllocator</code> 进行分配的，如果是字节数组或者 NIO buffer 的 wrapper，由于底层是定长数组，因此 Netty buffer 无法获取其分配器，自然地，也不知道扩容时用哪个分配器才能跟原来的分配方式一致，因此这种情况是不允许扩容的。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf</span> <span class="operator">=</span> Unpooled.wrappedBuffer(ByteBuffer.allocate(<span class="number">100</span>));</span><br><span class="line">buf.writerIndex(<span class="number">0</span>);</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">200</span>; i++) &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        buf.writeByte(<span class="number">1</span>);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IndexOutOfBoundsException e) &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;i = &quot;</span> + i);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">buf.release();</span><br></pre></td></tr></table></figure>
+
+<p>输出 <code>i = 100</code>，也就是容量到达 100 时就无法继续写入了。</p>
+<h3 id="引用计数"><a href="#引用计数" class="headerlink" title="引用计数"></a>引用计数</h3><p>需要注意的是每个 Netty buffer 维护了一个引用计数，在调用 <code>retain()</code> 的时候自增，在 <code>release()</code> 的时候自减，使用 allocator 分配的时候初始为 1，只有引用计数降为 0 才会回收内存，否则会出现内存泄漏。由于在 Java 中，经常是将 buffer 传递给其它对象后就不再使用了，因此惯用法是最后一个使用 buffer 对象负责 release。</p>
+<p>Netty 可以设置内存泄漏的检测器，详细用法参考 <a target="_blank" rel="noopener" href="https://netty.io/4.0/api/io/netty/util/ResourceLeakDetector.html">ResourceLeakDetector</a>，它可以设置检测等级，默认是 Disabled。这里给出一个示例检测全局资源泄漏。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">leakDemo</span><span class="params">(<span class="keyword">final</span> ByteBufAllocator allocator)</span> &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">ByteBuf</span> <span class="variable">buf</span> <span class="operator">=</span> allocator.buffer(<span class="number">1024</span> * <span class="number">1024</span>);</span><br><span class="line">    buf.writeByte(<span class="number">1</span>);</span><br><span class="line">    buf.readByte();</span><br><span class="line">    <span class="comment">// <span class="doctag">NOTE:</span> not released</span></span><br><span class="line">    <span class="comment">//buf.release();</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException &#123;</span><br><span class="line">    <span class="comment">// 等价于加上 JVM 选项 -Dio.netty.leakDetectionLevel=paranoid</span></span><br><span class="line">    ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);</span><br><span class="line">    <span class="keyword">final</span> <span class="type">ByteBufAllocator</span> <span class="variable">allocator</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">PooledByteBufAllocator</span>(<span class="literal">false</span> <span class="comment">/* preferDirect */</span>);</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; ; i++) &#123;</span><br><span class="line">        leakDemo(allocator);</span><br><span class="line">        Thread.sleep(<span class="number">100</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">2021-08-20 23:15:55:264 [main] ERROR io.netty.util.ResourceLeakDetector - LEAK: ByteBuf.release() was not called before it&#x27;s garbage-collected. See https://netty.io/wiki/reference-counted-objects.html for more information.</span><br><span class="line">Recent access records: </span><br><span class="line">#1:</span><br><span class="line">	io.netty.buffer.AdvancedLeakAwareByteBuf.readByte(AdvancedLeakAwareByteBuf.java:400)</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>从而方便定位泄漏位置。</p>
+<blockquote>
+<p>需要注意的是 paranoid 时最高的检测等级，如果改成 simple 或 advanced，上述错误不会报出来。另外如果 preferDirect 改为 true 或者使用默认的 allocator，这里也检测不出来。原因可以参考回答：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/28822632/netty-4-5-does-not-actually-detect-resource-leak-of-bytebuf">https://stackoverflow.com/questions/28822632/netty-4-5-does-not-actually-detect-resource-leak-of-bytebuf</a></p>
+<p>原因简单说就是 Netty 的资源泄漏检测机制依赖于 <code>ReferenceQueue</code> 和 <code>PhantomReference</code>，如果 VM 太早终止或者 GC 不够快，那么检测器无法判断是否泄漏</p>
+</blockquote>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文从 NIO buffer 入手，学习了 Netty buffer 的一些改进，包括读写位置分离，自定义分配器，自动扩容。同时还要注意 Netty buffer 相比 NIO buffer 而言需要谨慎地管理内存，同时还可以用 Netty 提供的检测器检测资源泄漏。</p>
+<p>个人认为 Netty 的最大优点在于它提供的池化分配器，可以安全地复用堆外内存，减少了 GC 的同时避免了从系统的堆内存到 JVM 堆的拷贝。因此 Pulsar 无论是 broker 还是 client 在分配内存保存消息时，都是使用的 Netty 的分配器。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/05/09/%E5%86%8D%E6%8E%A2-CompletableFuture/" rel="prev" title="再探 CompletableFuture">
+      <i class="fa fa-chevron-left"></i> 再探 CompletableFuture
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/09/02/Pulsar-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB-%E6%B6%88%E8%B4%B9%E8%80%85%E7%9A%84%E8%AE%A2%E9%98%85/" rel="next" title="Pulsar 源码阅读 - 消费者的订阅">
+      Pulsar 源码阅读 - 消费者的订阅 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AE%80%E8%BF%B0"><span class="nav-number">1.</span> <span class="nav-text">简述</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#NIO-buffer"><span class="nav-number">2.</span> <span class="nav-text">NIO buffer</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Netty-buffer"><span class="nav-number">3.</span> <span class="nav-text">Netty buffer</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%9B%E5%BB%BA"><span class="nav-number">3.1.</span> <span class="nav-text">创建</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%BB%E5%86%99%E4%BD%8D%E7%BD%AE%E5%88%86%E7%A6%BB"><span class="nav-number">3.2.</span> <span class="nav-text">读写位置分离</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%89%A9%E5%AE%B9"><span class="nav-number">3.3.</span> <span class="nav-text">扩容</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0"><span class="nav-number">3.4.</span> <span class="nav-text">引用计数</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

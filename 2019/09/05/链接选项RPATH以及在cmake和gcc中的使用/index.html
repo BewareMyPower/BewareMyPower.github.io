@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="注：此文已作废，本文存在若干事实性错误以及误导，在最新一篇文章中将重新说明。  前言毕业前帮师兄写框架程序时，以及最近折腾公司内部项目的编译，都遇到一些以前没有遇到的问题，这里简单地记一些。 本文要讲的也就是 rpath ，即 relative path 的缩写，最初遇到这个坑时是在写 cmake 时，直接 make 生成的程序能够链接到指定的动态库，但是 make install 之后发现就链接">
+<meta property="og:type" content="article">
+<meta property="og:title" content="链接选项RPATH以及在cmake和gcc中的使用">
+<meta property="og:url" content="http://yoursite.com/2019/09/05/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9RPATH%E4%BB%A5%E5%8F%8A%E5%9C%A8cmake%E5%92%8Cgcc%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="注：此文已作废，本文存在若干事实性错误以及误导，在最新一篇文章中将重新说明。  前言毕业前帮师兄写框架程序时，以及最近折腾公司内部项目的编译，都遇到一些以前没有遇到的问题，这里简单地记一些。 本文要讲的也就是 rpath ，即 relative path 的缩写，最初遇到这个坑时是在写 cmake 时，直接 make 生成的程序能够链接到指定的动态库，但是 make install 之后发现就链接">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-09-04T17:12:42.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.247Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="链接">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/09/05/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9RPATH%E4%BB%A5%E5%8F%8A%E5%9C%A8cmake%E5%92%8Cgcc%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>链接选项RPATH以及在cmake和gcc中的使用 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/09/05/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9RPATH%E4%BB%A5%E5%8F%8A%E5%9C%A8cmake%E5%92%8Cgcc%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          链接选项RPATH以及在cmake和gcc中的使用
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-09-05 01:12:42" itemprop="dateCreated datePublished" datetime="2019-09-05T01:12:42+08:00">2019-09-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>注：此文已作废，本文存在若干事实性错误以及误导，在<a target="_blank" rel="noopener" href="https://bewaremypower.github.io//2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/">最新一篇文章</a>中将重新说明。</p>
+<hr>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>毕业前帮师兄写框架程序时，以及最近折腾公司内部项目的编译，都遇到一些以前没有遇到的问题，这里简单地记一些。</p>
+<p>本文要讲的也就是 <code>rpath</code> ，即 relative path 的缩写，最初遇到这个坑时是在写 <code>cmake</code> 时，直接 <code>make</code> 生成的程序能够链接到指定的动态库，但是 <code>make install</code> 之后发现就链接失效了。</p>
+<h2 id="示例项目"><a href="#示例项目" class="headerlink" title="示例项目"></a>示例项目</h2><p>这里举个简单的例子来复现，目录结构为：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ tree .</span><br><span class="line">.</span><br><span class="line">├── CMakeLists.txt</span><br><span class="line">├── example</span><br><span class="line">│   ├── CMakeLists.txt</span><br><span class="line">│   └── main.c</span><br><span class="line">└── src</span><br><span class="line">    ├── CMakeLists.txt</span><br><span class="line">    ├── foo.c</span><br><span class="line">    └── foo.h</span><br></pre></td></tr></table></figure>
+
+<p>代码组织方式是： <code>src</code> 目录为库目录，其源码会编译成动态库 <code>libfoo.so</code>，<code>example</code> 为示例目录，其源码会包含 <code>src</code> 目录的头文件，并链接到动态库 <code>libfoo.so</code> 。具体代码也不长，依次贴出：</p>
+<p><code>./CMakeLists.txt</code>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.5</span>)</span><br><span class="line"><span class="keyword">project</span>(example C)</span><br><span class="line"><span class="keyword">set</span>(CMAKE_CFLAGS -g -Wall)</span><br><span class="line"><span class="keyword">add_subdirectory</span>(src)</span><br><span class="line"><span class="keyword">add_subdirectory</span>(example)</span><br></pre></td></tr></table></figure>
+
+<p><code>./src/CMakeLists.txt</code>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(foo SHARED foo.c)</span><br><span class="line"><span class="keyword">install</span>(TARGETS foo LIBRARY DESTINATION lib)</span><br></pre></td></tr></table></figure>
+
+<p><code>./src/foo.h</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">ifndef</span> FOO_H</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> FOO_H</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">foo</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span>  <span class="comment">// FOO_H</span></span></span><br></pre></td></tr></table></figure>
+
+<p><code>./src/foo.c</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;foo.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">foo</span><span class="params">()</span> &#123; <span class="built_in">printf</span>(<span class="string">&quot;foo\n&quot;</span>); &#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>./example/CMakeLists</code>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_executable</span>(main main.c)</span><br><span class="line"><span class="keyword">include_directories</span>(../src)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(main foo)</span><br><span class="line"><span class="keyword">install</span>(TARGETS main RUNTIME DESTINATION bin)</span><br></pre></td></tr></table></figure>
+
+<p><code>./example/main.c</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;foo.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">  foo();</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="编译、安装及测试"><a href="#编译、安装及测试" class="headerlink" title="编译、安装及测试"></a>编译、安装及测试</h2><p>老方法，新建一个临时目录用来存放中间文件，以下命令在项目根目录下执行，将动态库和可执行程序安装到根目录下的 <code>lib</code> 和 <code>bin</code> 目录，然后回到根目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> build &amp;&amp; <span class="built_in">cd</span> build</span><br><span class="line">cmake .. -DCMAKE_INSTALL_PREFIX=..</span><br><span class="line">make &amp;&amp; make install &amp;&amp; <span class="built_in">cd</span> ..</span><br></pre></td></tr></table></figure>
+
+<p>此时目录结构为：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ tree . -I build</span><br><span class="line">.</span><br><span class="line">├── bin</span><br><span class="line">│   └── main</span><br><span class="line">├── CMakeLists.txt</span><br><span class="line">├── example</span><br><span class="line">│   ├── CMakeLists.txt</span><br><span class="line">│   └── main.c</span><br><span class="line">├── lib</span><br><span class="line">│   └── libfoo.so</span><br><span class="line">└── src</span><br><span class="line">    ├── CMakeLists.txt</span><br><span class="line">    ├── foo.c</span><br><span class="line">    └── foo.h</span><br></pre></td></tr></table></figure>
+
+<p>首先我们运行 <code>build</code> 目录下的可执行文件，并查看其连接的 <code>libfoo.so</code> 路径：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ ./build/example/main </span><br><span class="line">foo</span><br><span class="line">$ ldd ./build/example/main | grep foo</span><br><span class="line">	libfoo.so =&gt; /home/xyz/RPATH/build/src/libfoo.so (0x00007f5d41c23000)</span><br></pre></td></tr></table></figure>
+
+<p>这里 <code>/home/xyz/RPATH</code> 是我的项目根目录绝对路径，可以发现 <code>make</code> 生成的可执行文件，链接的是绝对路径，并且运行也没问题。但是再看看安装后的可执行文件和链接的库：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ ./bin/main </span><br><span class="line">./bin/main: error <span class="keyword">while</span> loading shared libraries: libfoo.so: cannot open shared object file: No such file or directory</span><br><span class="line">$ ldd ./bin/main | grep foo</span><br><span class="line">	libfoo.so =&gt; not found</span><br></pre></td></tr></table></figure>
+
+<p>我们会发现可执行文件失去了链接，因此要运行 <code>main</code> ，必须手动将动态库添加到系统路径中：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ LD_LIBRARY_PATH=./lib ./bin/main </span><br><span class="line">foo</span><br></pre></td></tr></table></figure>
+
+<h2 id="问题在哪"><a href="#问题在哪" class="headerlink" title="问题在哪"></a>问题在哪</h2><p>这个问题最初出现在我帮师兄写的框架当中，当时也找到了stackoverflow上的讨论帖：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/42695839/cmake-make-install-does-not-link-against-libraries-in-ubuntu">cmake: “make install” does not link against libraries in Ubuntu</a></p>
+<p>简单翻译下：</p>
+<p>系统首先会在 <code>/etc/ld.so.conf</code> 文件配置的路径中寻找动态库（在我的系统上该文件记录的是 <code>/etc/ld.so.conf.d</code> 目录下的所有 <code>*.conf</code> 文件），如果找不到，则有以下4个选项：</p>
+<ol>
+<li>将库安装到系统默认路径比如 <code>/lib</code> 和 <code>/usr/lib</code>（但可能因为没有权限而无法实施）；</li>
+<li>编辑系统范围的搜索路径（同样可能因为没有权限而无法实施）；</li>
+<li>设置 <code>LD_LIBRARY_PATH</code>（就像我们上节末尾所做的，但它会覆盖系统路径，也就是说可能会优先选择自己的库而不是系统路径的同名库）；</li>
+<li>设置 <code>RPATH</code>，告诉可执行文件该到哪寻找它的库。</li>
+</ol>
+<p>OK，现在来看问题的产生原因：<code>RPATH</code> 在 <code>make install</code> 后会被自动地清除。为什么会这样呢？因为 <code>cmake</code> 安装的可执行文件和动态库的相对路径，可能和 <code>make</code> 生成的不一样，因此无法自动记住。</p>
+<h2 id="cmake的解决方法"><a href="#cmake的解决方法" class="headerlink" title="cmake的解决方法"></a>cmake的解决方法</h2><p>当然，<code>cmake</code> 本身也提供了解决方法，参见：<a target="_blank" rel="noopener" href="https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling">RPATH handling</a>。</p>
+<p>不想看官网的长篇大论的话，针对本文的示例，在项目根目录的 <code>CMakeLists.txt</code> 中添加：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span>(CMAKE_INSTALL_RPATH <span class="string">&quot;$&#123;CMAKE_INSTALL_PREFIX&#125;/lib&quot;</span>)</span><br><span class="line"><span class="keyword">set</span>(CMAKE_INSTALL_RPATH_USE_LINK_PATH <span class="keyword">TRUE</span>)</span><br></pre></td></tr></table></figure>
+
+<p><code>make install</code> 安装时可以看到如下提示信息：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-- Installing: /home/xyz/RPATH/bin/main</span><br><span class="line">-- Set runtime path of &quot;/home/xyz/RPATH/bin/main&quot; to &quot;/home/xyz/RPATH/lib&quot;</span><br></pre></td></tr></table></figure>
+
+<p>这种方式还是设置的绝对路径，也就是 <code>cmake</code> 安装目录下的 <code>lib</code> 子目录，然后可以发现安装后的 <code>main</code> 成功链接到了 <code>libfoo.so</code>，并且改变 <code>main</code> 路径，仍然可以链接到 <code>libfoo.so</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ldd bin/main | grep foo</span><br><span class="line">	libfoo.so =&gt; /home/xyz/RPATH/lib/libfoo.so (0x00007f60818c2000)</span><br><span class="line">$ <span class="built_in">mv</span> bin/main .</span><br><span class="line">$ ldd main | grep foo</span><br><span class="line">	libfoo.so =&gt; /home/xyz/RPATH/lib/libfoo.so (0x00007f6ff516f000)</span><br></pre></td></tr></table></figure>
+
+<p>类似地，我们可以把 <code>CMAKE_INSTALL_RPATH</code> 指定为相对路径 <code>../lib</code>，但这样的话局限性比较大，也就是说必须保证动态库在 <code>$PWD/../lib</code> 下，比如按这种方式编译安装后：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ldd ./bin/main | grep foo</span><br><span class="line">	libfoo.so =&gt; not found</span><br><span class="line">$ <span class="built_in">cd</span> bin</span><br><span class="line">$ ldd ./main | grep foo</span><br><span class="line">	libfoo.so =&gt; ../lib/libfoo.so (0x00007f12fe0c7000)</span><br></pre></td></tr></table></figure>
+
+<p>但这种方式也有个优点，也就是说哦，只要动态库在当前工作目录的相对路径 <code>../lib</code> 下，就能链接到该动态库，此时可以写一个脚本，和 <code>main</code> 放在同一目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line">SHELL_DIR=$(<span class="built_in">cd</span> $(<span class="built_in">dirname</span> <span class="variable">$0</span>) &amp;&amp; <span class="built_in">echo</span> <span class="variable">$PWD</span>)</span><br><span class="line"><span class="built_in">cd</span> <span class="variable">$SHELL_DIR</span> &amp;&amp; ./main</span><br></pre></td></tr></table></figure>
+
+<p>第一行是取得脚本目录的绝对路径，第2行是进入该路径，这样只要动态库在可执行文件（以及运行脚本）的相对路径 <code>../lib</code> 下，无论从哪个目录调用该脚本，都能成功使可执行文件链接到该动态库：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">ls</span> bin/</span><br><span class="line">main  run.sh</span><br><span class="line">$ <span class="built_in">ls</span> lib/</span><br><span class="line">libfoo.so</span><br><span class="line">$ ./bin/run.sh </span><br><span class="line">foo</span><br><span class="line">$ <span class="built_in">cd</span> bin/ &amp;&amp; ./run.sh &amp;&amp; <span class="built_in">cd</span> -</span><br><span class="line">foo</span><br><span class="line">/home/xyz/RPATH</span><br><span class="line">$ <span class="built_in">mkdir</span> temp</span><br><span class="line">$ <span class="built_in">mv</span> bin/ lib/ temp/</span><br><span class="line">$ ./temp/bin/run.sh </span><br><span class="line">foo</span><br></pre></td></tr></table></figure>
+
+<p>不过既然借助了辅助脚本了，实际上在脚本里手动设置 <code>LD_LIBRARY_PATH</code> 为相对路径看起来更简单一些。</p>
+<h2 id="GCC的解决方法"><a href="#GCC的解决方法" class="headerlink" title="GCC的解决方法"></a>GCC的解决方法</h2><p>为什么说到这个呢？因为我最近在使用公司内部项目的时候，发现自己的测试代码一直出错，查看日志，竟然源码路径来自其他用户的个人目录。也就是说是其他用户编译了动态库，然后使用超级权限将其安装到了系统目录。</p>
+<p>对于这种情况，可以用 <code>LD_LIBRARY_PATH</code> 覆盖，但是如果修改了目录后，每次都要重新设置 <code>LD_LIBRARY_PATH</code>，此时用 <code>gcc</code> 的链接选项就行了，还是对这个项目，手动用 <code>gcc</code> 进行编译：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">cd</span> src/</span><br><span class="line">$ gcc -c -fPIC foo.c </span><br><span class="line">$ gcc -shared foo.o -o libfoo.so</span><br><span class="line">$ <span class="built_in">cd</span> ../example/</span><br><span class="line">$ gcc main.c -I../src -L../src -lfoo -Wl,-rpath=../src</span><br></pre></td></tr></table></figure>
+
+<p>注意，<code>-Wl,-rpath</code> 这个选项必不可少，它指定了 <code>RPATH</code> 的相对路径，为此，我将原来的 <code>libfoo.so</code> 放在系统目录 <code>/lib64</code> 下，然后修改 <code>foo.c</code> （打印 <code>&quot;new foo&quot;</code> 而不是 <code>&quot;foo&quot;</code>）后编译成动态库放在 <code>src</code> 目录下，测试如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">cd</span> example/</span><br><span class="line">$ gcc main.c -I../src -L../src -lfoo</span><br><span class="line">$ ./a.out </span><br><span class="line">foo</span><br><span class="line">$ gcc main.c -I../src -L../src -lfoo -Wl,-rpath=../src</span><br><span class="line">$ ./a.out </span><br><span class="line">new foo</span><br><span class="line">$ <span class="built_in">cd</span> .. &amp;&amp; <span class="built_in">mkdir</span> temp &amp;&amp; <span class="built_in">mv</span> src/ example/ temp</span><br><span class="line">$ tree temp/</span><br><span class="line">temp/</span><br><span class="line">├── example</span><br><span class="line">│   ├── a.out</span><br><span class="line">│   ├── CMakeLists.txt</span><br><span class="line">│   └── main.c</span><br><span class="line">└── src</span><br><span class="line">    ├── CMakeLists.txt</span><br><span class="line">    ├── foo.c</span><br><span class="line">    ├── foo.h</span><br><span class="line">    ├── foo.o</span><br><span class="line">    └── libfoo.so</span><br><span class="line">$ ./temp/example/a.out </span><br><span class="line">foo</span><br><span class="line">$ <span class="built_in">cd</span> temp/example/ &amp;&amp; ./a.out</span><br><span class="line">new foo</span><br></pre></td></tr></table></figure>
+
+<p>和刚才 <code>cmake</code> 设置 <code>RPATH</code> 的测试结果一样，只要当前工作目录满足和动态库所在目录的相对路径是 <code>RPATH</code>，那么运行可执行文件所链接到的动态库就是相对路径的动态库。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/%E9%93%BE%E6%8E%A5/" rel="tag"># 链接</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/07/26/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-4-GDB%E5%8D%87%E7%BA%A78-0/" rel="prev" title="我的vim开发环境搭建(4): GDB升级8.0">
+      <i class="fa fa-chevron-left"></i> 我的vim开发环境搭建(4): GDB升级8.0
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/09/18/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB01-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%90%AF%E5%8A%A8/" rel="next" title="Kafka源码阅读01: 网络层阅读之服务器的启动">
+      Kafka源码阅读01: 网络层阅读之服务器的启动 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%A4%BA%E4%BE%8B%E9%A1%B9%E7%9B%AE"><span class="nav-number">2.</span> <span class="nav-text">示例项目</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BC%96%E8%AF%91%E3%80%81%E5%AE%89%E8%A3%85%E5%8F%8A%E6%B5%8B%E8%AF%95"><span class="nav-number">3.</span> <span class="nav-text">编译、安装及测试</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%9C%A8%E5%93%AA"><span class="nav-number">4.</span> <span class="nav-text">问题在哪</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#cmake%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95"><span class="nav-number">5.</span> <span class="nav-text">cmake的解决方法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#GCC%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95"><span class="nav-number">6.</span> <span class="nav-text">GCC的解决方法</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

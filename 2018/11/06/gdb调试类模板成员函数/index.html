@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="gdb常用命令简单回顾首先列出一些常用的gdb命令l即list，从第1行开始查看当前文件，后面可接数字，比如l 10就是查看以第10行为中间行的若干行(比如第5-14行)。b即break，后接数字n，则代表在第n行设置断点。另外后接if &lt;condition&gt;可以设条件断点。i即info，后接b可以查看所有的断点信息(包括断点编号)。d即delete，后接断点编号，可以删除特定断点。r">
+<meta property="og:type" content="article">
+<meta property="og:title" content="gdb调试类模板成员函数">
+<meta property="og:url" content="http://yoursite.com/2018/11/06/gdb%E8%B0%83%E8%AF%95%E7%B1%BB%E6%A8%A1%E6%9D%BF%E6%88%90%E5%91%98%E5%87%BD%E6%95%B0/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="gdb常用命令简单回顾首先列出一些常用的gdb命令l即list，从第1行开始查看当前文件，后面可接数字，比如l 10就是查看以第10行为中间行的若干行(比如第5-14行)。b即break，后接数字n，则代表在第n行设置断点。另外后接if &lt;condition&gt;可以设条件断点。i即info，后接b可以查看所有的断点信息(包括断点编号)。d即delete，后接断点编号，可以删除特定断点。r">
+<meta property="og:locale">
+<meta property="article:published_time" content="2018-11-06T07:29:44.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.227Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2018/11/06/gdb%E8%B0%83%E8%AF%95%E7%B1%BB%E6%A8%A1%E6%9D%BF%E6%88%90%E5%91%98%E5%87%BD%E6%95%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>gdb调试类模板成员函数 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/11/06/gdb%E8%B0%83%E8%AF%95%E7%B1%BB%E6%A8%A1%E6%9D%BF%E6%88%90%E5%91%98%E5%87%BD%E6%95%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          gdb调试类模板成员函数
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-11-06 15:29:44" itemprop="dateCreated datePublished" datetime="2018-11-06T15:29:44+08:00">2018-11-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="gdb常用命令简单回顾"><a href="#gdb常用命令简单回顾" class="headerlink" title="gdb常用命令简单回顾"></a>gdb常用命令简单回顾</h2><p>首先列出一些常用的gdb命令<br><code>l</code>即<code>list</code>，从第1行开始查看当前文件，后面可接数字，比如<code>l 10</code>就是查看以第10行为中间行的若干行(比如第5-14行)。<br><code>b</code>即<code>break</code>，后接数字n，则代表在第n行设置断点。另外后接<code>if &lt;condition&gt;</code>可以设条件断点。<br><code>i</code>即<code>info</code>，后接<code>b</code>可以查看所有的断点信息(包括断点编号)。<br><code>d</code>即<code>delete</code>，后接断点编号，可以删除特定断点。<br><code>r</code>即<code>run</code>，运行程序。如果需要添加命令行参数，则后接命令行参数即可，也可以后接<code>&lt; file</code>这种将文件file的内容重定向到标准输入。<br><code>n</code>即<code>next</code>，运行1步。<br><code>s</code>即<code>step</code>，进入这一行的函数中。</p>
+<h2 id="step的局限性"><a href="#step的局限性" class="headerlink" title="step的局限性"></a>step的局限性</h2><p>上面几个命令算是调试的通用命令，比较值得注意的是最后一个<code>step</code>操作，因为有可能一行会调用多个函数，比如下一行代码</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vector&lt;string&gt; v = &#123;&quot;hello&quot;, &quot;world&quot;&#125;;</span><br></pre></td></tr></table></figure>
+<p>在这一行设断点，运行至此处，然后输入<code>s</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Breakpoint 1, main () at gdb.cc:8</span><br><span class="line">8     vector&lt;string&gt; v = &#123;&quot;hello&quot;, &quot;world&quot;&#125;;</span><br><span class="line">(gdb) s</span><br><span class="line">std::allocator&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; &gt;::allocator (this=0x7fffffffe22f) at /usr/include/c++/5/bits/allocator.h:113</span><br><span class="line">113       allocator() throw() &#123; &#125;</span><br></pre></td></tr></table></figure>
+<p>简单看，这一句涉及到下面几个操作：</p>
+<ol>
+<li>构造<code>std::initialize_list&lt;string&gt;</code>对象，包含2个字符串<code>&quot;hello&quot;</code>和<code>&quot;world&quot;</code>；</li>
+<li>调用<code>vector&lt;string&gt;</code>的构造函数，接收初始化列表；</li>
+</ol>
+<p>但实际并不然，<code>string</code>对象会调用接收字符串字面值的构造函数，range for语法会调用到底层的<code>begin()</code>、<code>size()</code>、<code>end()</code>等方法，以及<code>distance()</code>函数之类，如果继续<code>s</code>下去，会看到大量无用信息。<br>因此需要在合适的时机用<code>n</code>跳到下一句，此时可以用<code>l</code>查看当前跳转到哪个文件了。比如我继续<code>step</code>两次跳转到了<code>vector</code>的构造函数</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(gdb) s</span><br><span class="line">std::vector&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;, std::allocator&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; &gt; &gt;::vector (this=0x7fffffffe230, __l=..., __a=...) at /usr/include/c++/5/bits/stl_vector.h:373</span><br><span class="line">373       vector(initializer_list&lt;value_type&gt; __l,</span><br></pre></td></tr></table></figure>
+<p>但这是盲目的，因为我不清楚要跳转几次，如果提前<code>next</code>进入下一步了，可能就把后面整个过程就跳出去了。<br>因此如果想调试<code>vector</code>的构造函数而不去管其他的杂七杂八的函数，需要精确跳转到特定函数中。</p>
+<h2 id="gdb函数或文件设断点"><a href="#gdb函数或文件设断点" class="headerlink" title="gdb函数或文件设断点"></a>gdb函数或文件设断点</h2><p>gdb可以给文件设断点，比如我的程序是<code>Blob.cc</code>编译的，包含了自定义的头文件<code>Blob.h</code>。<br>用<code>b &lt;file&gt;:&lt;number&gt;</code>即可设断点，如下所示</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">(gdb) b Blob.h:25</span><br><span class="line">Breakpoint 1 at 0x401da0: file Blob.h, line 25.</span><br></pre></td></tr></table></figure>
+<p>但问题是，怎么在gdb中查看<code>Blob.h</code>的内容以知道该在哪设断点？gdb不提供查看文件的命令，但是可以查看函数和类。<br>但对于类模板和函数模板而言，由于它们都是在编译时进行实例化的，所以需要提供模板参数。<br>且对于类成员函数而言，需要用<code>::</code>来指定对应成员函数。调试流程如下所示</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">(gdb) l BlobPtr&lt;int&gt;</span><br><span class="line">35    void check(size_type i, const std::string&amp; msg);</span><br><span class="line">36  &#125;;</span><br><span class="line">37</span><br><span class="line">38  // 若试图访问一个不存在的元素，BlobPtr抛出一个异常</span><br><span class="line">39  template &lt;typename T&gt;</span><br><span class="line">40  class BlobPtr &#123;</span><br><span class="line">    41   public:</span><br><span class="line">42    BlobPtr() = default;</span><br><span class="line">43    BlobPtr(Blob&lt;T&gt;&amp; a, size_t sz = 0) : wptr(a.data), curr(sz) &#123;&#125;</span><br><span class="line">44</span><br><span class="line">(gdb) l BlobPtr&lt;int&gt;::operator++</span><br><span class="line">file: &quot;Blob.h&quot;, line number: 137</span><br><span class="line">file: &quot;Blob.h&quot;, line number: 151</span><br><span class="line">(gdb) l BlobPtr&lt;int&gt;::operator++(int)</span><br><span class="line">146   check(curr, &quot;operator-- past begin of BlobPtr&quot;);</span><br><span class="line">147   return *this;</span><br><span class="line">148 &#125;</span><br><span class="line">149</span><br><span class="line">150 template &lt;typename T&gt;</span><br><span class="line">151 BlobPtr&lt;T&gt; BlobPtr&lt;T&gt;::operator++(int) &#123;</span><br><span class="line">    152   auto ret = *this;</span><br><span class="line">153   ++*this;</span><br><span class="line">154   return ret;</span><br><span class="line">155 &#125;</span><br></pre></td></tr></table></figure>
+<p>C++支持重载，因此查看自增运算符时会提示两个地方，如果这两个地方在一起，则会一起显示。可以通过指定函数参数列表来查看特定的函数。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">(gdb) b BlobPtr&lt;int&gt;::operator++</span><br><span class="line">Breakpoint 1 at 0x402099: BlobPtr&lt;int&gt;::operator++. (2 locations)</span><br><span class="line">(gdb) i b</span><br><span class="line">Num     Type           Disp Enb Address            What</span><br><span class="line">1       breakpoint     keep y   &lt;MULTIPLE&gt;</span><br><span class="line">1.1                         y     0x0000000000402099 in BlobPtr&lt;int&gt;::operator++() at Blob.h:137</span><br><span class="line">1.2                         y     0x000000000040217e in BlobPtr&lt;int&gt;::operator++(int) at Blob.h:151</span><br><span class="line">(gdb) b BlobPtr&lt;int&gt;::operator++(int)</span><br><span class="line">Note: breakpoint 1 also set at pc 0x40217e.</span><br><span class="line">Breakpoint 2 at 0x40217e: file Blob.h, line 151.</span><br><span class="line">(gdb) i b</span><br><span class="line">Num     Type           Disp Enb Address            What</span><br><span class="line">1       breakpoint     keep y   &lt;MULTIPLE&gt;</span><br><span class="line">1.1                         y     0x0000000000402099 in BlobPtr&lt;int&gt;::operator++() at Blob.h:137</span><br><span class="line">1.2                         y     0x000000000040217e in BlobPtr&lt;int&gt;::operator++(int) at Blob.h:151</span><br><span class="line">2       breakpoint     keep y   0x000000000040217e in BlobPtr&lt;int&gt;::operator++(int) at Blob.h:151</span><br></pre></td></tr></table></figure>
+<p>可以在函数设断点，可以看到，断点编号是1.1和1.2，因为有2处重载，因此也可以通过明确参数列表来为特定的重载设置断点。</p>
+<p>总结：通过<code>list</code>查看特定函数或类后，就可以针对特定函数设置断点，也可以针对该函数所在文件的某一行设置断点，这样就不用盲目地step了，而是精确地跳转到指定函数。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/10/25/C%E6%A0%87%E5%87%86I-O%E5%BA%93%E8%87%AA%E5%AE%9A%E4%B9%89%E7%BC%93%E5%86%B2%E5%8C%BA/" rel="prev" title="C标准I/O库自定义缓冲区">
+      <i class="fa fa-chevron-left"></i> C标准I/O库自定义缓冲区
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/11/21/%E5%AE%9E%E7%8E%B0thread%E5%BA%93%E7%BB%86%E8%8A%82%EF%BC%9A%E4%BD%BF%E7%94%A8std-decay%E4%BF%9D%E5%AD%98%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88/" rel="next" title="实现thread库细节：使用std::decay保存函数指针">
+      实现thread库细节：使用std::decay保存函数指针 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#gdb%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4%E7%AE%80%E5%8D%95%E5%9B%9E%E9%A1%BE"><span class="nav-number">1.</span> <span class="nav-text">gdb常用命令简单回顾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#step%E7%9A%84%E5%B1%80%E9%99%90%E6%80%A7"><span class="nav-number">2.</span> <span class="nav-text">step的局限性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#gdb%E5%87%BD%E6%95%B0%E6%88%96%E6%96%87%E4%BB%B6%E8%AE%BE%E6%96%AD%E7%82%B9"><span class="nav-number">3.</span> <span class="nav-text">gdb函数或文件设断点</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

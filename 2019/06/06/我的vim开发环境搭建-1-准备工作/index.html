@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言即将毕业入职，之前实习时的开发机是CentOS 6.10，因此这里vim开发环境的搭建是基于CentOS 6.10的。 相比更流行的Ubuntu系统，CentOS的毛病实在太多了，折腾起来累死人。另一方面，由于公司开发机并不能像个人电脑一样随心所欲，所以像高版本的vim、gcc等，都是安装到自己的HOME目录，因此绝大多数软件需要手动下载源码、编译、安装到HOME目录。 问题来了，为什么要升级">
+<meta property="og:type" content="article">
+<meta property="og:title" content="我的vim开发环境搭建(1): 准备工作">
+<meta property="og:url" content="http://yoursite.com/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言即将毕业入职，之前实习时的开发机是CentOS 6.10，因此这里vim开发环境的搭建是基于CentOS 6.10的。 相比更流行的Ubuntu系统，CentOS的毛病实在太多了，折腾起来累死人。另一方面，由于公司开发机并不能像个人电脑一样随心所欲，所以像高版本的vim、gcc等，都是安装到自己的HOME目录，因此绝大多数软件需要手动下载源码、编译、安装到HOME目录。 问题来了，为什么要升级">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-06-05T19:43:39.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.234Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="搭环境">
+<meta property="article:tag" content="vim">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>我的vim开发环境搭建(1): 准备工作 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          我的vim开发环境搭建(1): 准备工作
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-06-06 03:43:39" itemprop="dateCreated datePublished" datetime="2019-06-06T03:43:39+08:00">2019-06-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>即将毕业入职，之前实习时的开发机是CentOS 6.10，因此这里vim开发环境的搭建是基于CentOS 6.10的。</p>
+<p>相比更流行的Ubuntu系统，CentOS的毛病实在太多了，折腾起来累死人。另一方面，由于公司开发机并不能像个人电脑一样随心所欲，所以像高版本的vim、gcc等，都是安装到自己的HOME目录，因此绝大多数软件需要手动下载源码、编译、安装到HOME目录。</p>
+<p>问题来了，为什么要升级高版本？</p>
+<ol>
+<li>CentOS 6.10的源默认软件太老了，比如gcc版本才4.4.7，连C++11都不支持；</li>
+<li>像YouCompleteMe(YCM)这种优秀的插件，需要各种高版本软件。</li>
+</ol>
+<p>为了节约篇幅，后文的下载、解压的命令都省略了，比如下载基本就是找到官网下载链接，然后<code>wget</code>命令下载下来，对于github上的项目，直接<code>git clone</code>。有时候比较慢，我会在租的VPS上下载好，然后打包传回来。</p>
+<p>使用<code>tar</code>解压，对<code>.tar.gz</code>后缀的用<code>zxvf</code>选项来解压，对<code>.tar.bz</code>后缀的用<code>jxvf</code>选项解压，对<code>.tar</code>或<code>.tar.xz</code>后缀的用<code>xvf</code>选项解压。其中<code>v</code>选项不是必要的，只是查看解压了什么内容。</p>
+<p>本人在折腾的过程中踩了很多坑，遇到很多错误，借助Google解决了大量问题，后文中不会对这些问题进行描述，而是直接讲述最终尝试后可行的方案。所有尝试均在VMware中新安装的CentOS 6.10系统上进行，系统来源于<a target="_blank" rel="noopener" href="http://mirrors.zju.edu.cn/centos/6.10/isos/x86_64/">CentOS镜像站</a>的bin-DVD1版本。</p>
+<p>所有的软件均安装在<code>$HOME/local</code>下，我将其设为了环境变量<code>LOCAL</code>，通过在<code>~/.bashrc</code>中加上如下内容：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">export LOCAL=$HOME/local</span><br></pre></td></tr></table></figure>
+
+<h2 id="1-升级gcc"><a href="#1-升级gcc" class="headerlink" title="1. 升级gcc"></a>1. 升级gcc</h2><p>这里选用了我一直用的gcc版本，也是Ubuntu 16.04默认安装的最新版本：5.4。其实只需要4.8就够了，即完整支持C++11的功能。</p>
+<p>在CentOS下需要安装交叉编译IDE依赖，参考<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/24325754/gcc-installation-error">gcc installation error</a>，我新安装的系统没有g++，因此还需要安装<code>gcc-c++</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo yum install -y glibc-devel.i686 libgcc.i686 gcc-c++</span><br></pre></td></tr></table></figure>
+
+<p>去官网给出的<a target="_blank" rel="noopener" href="https://www.gnu.org/prep/ftp.html">镜像列表</a>中找到中国的地址，比如<a target="_blank" rel="noopener" href="https://mirrors.ustc.edu.cn/gnu/">ustc镜像</a>，下载gcc源码并解压，然后进入gcc源码目录，执行以下命令编译：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">./contrib/download_prerequisites</span><br><span class="line">mkdir build</span><br><span class="line">cd build</span><br><span class="line">../configure --prefix=$LOCAL/gcc-5.4.0 --enable-languages=c,c++</span><br><span class="line">make -j4</span><br><span class="line">make install</span><br></pre></td></tr></table></figure>
+
+<p>这里说明下，<code>make</code>选项是<code>-j4</code>是采用4个进程编译，因为我的个人电脑是4核。上述命令的逻辑就是新建<code>build</code>目录，然后<code>configure</code>、<code>make</code>、<code>make install</code>三步走的套路，通过<code>--prefix</code>选项指定<code>install</code>的目录。</p>
+<p>修改<code>~/.bashrc</code>文件，设置环境变量来使本地的文件优先于全局的同名文件被选择：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">export GCC_DIR=$LOCAL/gcc-5.4.0</span><br><span class="line">export PATH=$GCC_DIR/bin:$PATH</span><br><span class="line">export LD_LIBRARY_PATH=$GCC_DIR/lib:$GCC_DIR/lib64:$LD_LIBRARY_PATH</span><br></pre></td></tr></table></figure>
+
+<p>比如在我的电脑上这么配置后，<code>gcc</code>命令默认就是<code>~/local/gcc-5.4.0/bin/gcc</code>而非<code>/usr/bin/gcc</code>了。</p>
+<h2 id="2-升级某些软件"><a href="#2-升级某些软件" class="headerlink" title="2. 升级某些软件"></a>2. 升级某些软件</h2><p>有了高版本的gcc后便可从源码中直接编译安装高版本的软件了。本节升级的软件版本均已够用，如果需要更高版本的，可以选择下载更高版本的源码进行编译。</p>
+<h3 id="2-1-安装Python-2-7-16"><a href="#2-1-安装Python-2-7-16" class="headerlink" title="2.1 安装Python 2.7.16"></a>2.1 安装Python 2.7.16</h3><p>去官网下载源码解压，进入目录。首先安装依赖项，然后编译、安装（其中<code>test_weakref</code>耗时比较久）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sudo yum install -y zlib zlib-devel openssl* bzip2*</span><br><span class="line">./configure --prefix=$LOCAL/python2.7.16/ --enable-shared --with-zlib --enable-optimizations</span><br><span class="line">make -j4</span><br><span class="line">make install</span><br></pre></td></tr></table></figure>
+
+<p>在<code>~/.bashrc</code>文件中添加环境变量：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">export PY2_DIR=$LOCAL/python2.7.16</span><br><span class="line">export PATH=$PY2_DIR/bin:$PATH</span><br><span class="line">export LD_LIBRARY_PATH=$PY2_DIR/lib:$LD_LIBRARY_PATH</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-安装cmake-3-14-5"><a href="#2-2-安装cmake-3-14-5" class="headerlink" title="2.2 安装cmake 3.14.5"></a>2.2 安装cmake 3.14.5</h3><p>去官网下载源码解压，进入目录。直接编译、安装：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">./configure --prefix=$LOCAL/cmake-3.14.5</span><br><span class="line">gmake -j4</span><br><span class="line">make install</span><br></pre></td></tr></table></figure>
+
+<p>这里的是<code>gmake</code>而非<code>make</code>，但在Linux上<code>gmake</code>只是指向<code>make</code>的符号链接，代表GNU Make。</p>
+<p>在<code>~/.bashrc</code>文件中添加环境变量：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">export CMAKE_DIR=$LOCAL/cmake-3.14.5</span><br><span class="line">export PATH=$CMAKE_DIR/bin:$PATH</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-安装vim-8-1"><a href="#2-3-安装vim-8-1" class="headerlink" title="2.3 安装vim 8.1"></a>2.3 安装vim 8.1</h3><p>去github上克隆vim源码，进入目录，首先安装依赖项，然后编译安装：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">$ sudo yum -y groupinstall &#x27;Development Tools&#x27;</span><br><span class="line">$ sudo yum -y install ruby perl-devel python-devel ruby-devel perl-ExtUtils-Embed ncurses-devel</span><br><span class="line">$ ./configure --prefix=$LOCAL/vim \</span><br><span class="line"> --with-features=huge \</span><br><span class="line"> --enable-multibyte \</span><br><span class="line"> --enable-pythoninterp=yes \</span><br><span class="line"> --with-python-config-dir=$PY2_DIR/lib \</span><br><span class="line"> --enable-luainterp=yes \</span><br><span class="line"> --enable-cscope</span><br><span class="line">$ make VIMRUNTIMEDIR=$LOCAL/vim/share/vim/vim81</span><br><span class="line">$ cd src</span><br><span class="line">$ make</span><br><span class="line">$ make install</span><br></pre></td></tr></table></figure>
+
+<p>在<code>~/.bashrc</code>文件中添加环境变量：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">export VIMPATH=$HOME/local/vim</span><br><span class="line">export PATH=$VIMPATH/bin:$PATH</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-4-安装clang-8-0"><a href="#2-4-安装clang-8-0" class="headerlink" title="2.4 安装clang 8.0"></a>2.4 安装clang 8.0</h3><p>去<a target="_blank" rel="noopener" href="http://releases.llvm.org/download.html">LLVM下载页</a>分别下载llvm、clang、clang-tools-extra、compiler-rt源码按照以下命令解压、重命名：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">wget http://releases.llvm.org/8.0.0/llvm-8.0.0.src.tar.xz</span><br><span class="line">tar xvf llvm-8.0.0.src.tar.xz</span><br><span class="line">mv llvm-8.0.0.src llvm</span><br><span class="line">cd llvm/tools</span><br><span class="line">wget http://releases.llvm.org/8.0.0/cfe-8.0.0.src.tar.xz</span><br><span class="line">tar xvf cfe-8.0.0.src.tar.xz</span><br><span class="line">mv cfe-8.0.0.src clang</span><br><span class="line">cd clang/tools</span><br><span class="line">wget http://releases.llvm.org/8.0.0/clang-tools-extra-8.0.0.src.tar.xz</span><br><span class="line">tar xvf clang-tools-extra-8.0.0.src.tar.xz</span><br><span class="line">mv clang-tools-extra-8.0.0.src extra</span><br><span class="line">cd ../../../projects/</span><br><span class="line">wget http://releases.llvm.org/8.0.0/compiler-rt-8.0.0.src.tar.xz</span><br><span class="line">tar xvf compiler-rt-8.0.0.src.tar.xz</span><br><span class="line">mv compiler-rt-8.0.0.src compiler-rt</span><br></pre></td></tr></table></figure>
+
+<p>最终层次结构为：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">llvm</span><br><span class="line">  \-- tools</span><br><span class="line">     \-- clang</span><br><span class="line">        \-- tools</span><br><span class="line">           \-- extra</span><br><span class="line">  \-- projects</span><br><span class="line">     \-- compiler-rt</span><br></pre></td></tr></table></figure>
+
+<p>其中clang目录为重命名后的cfe目录，extra目录为重命名后的clang-tools-extra目录，并且都去掉了后缀版本号。</p>
+<p>然后进入llvm目录，执行下列编译操作，注意cmake识别的gcc路径仍然是系统路径，因此需要手动指定CC和CXX路径</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ mkdir build</span><br><span class="line">$ cd build</span><br><span class="line">$ CC=$LOCAL/gcc-5.4.0/bin/gcc CXX=$LOCAL/gcc-5.4.0/bin/c++ \</span><br><span class="line">cmake -G &quot;Unix Makefiles&quot; -DCMAKE_INSTALL_PREFIX=$HOME/local/clang8.0 \</span><br><span class="line">-DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=&quot;X86&quot; ..</span><br><span class="line">$ make -j4</span><br><span class="line">$ make install</span><br></pre></td></tr></table></figure>
+
+<p>这里多线程编译可能会有问题，我用<code>-j4</code>编译到68%的<code>ASTImporter</code>时<code>cc1plus</code>直接崩了，报错如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[ 68%] Building CXX object tools/clang/lib/AST/CMakeFiles/clangAST.dir/ASTImporter.cpp.o</span><br><span class="line">c++: internal compiler error: Killed (program cc1plus)</span><br></pre></td></tr></table></figure>
+
+<p>在.bashrc文件中添加环境变量</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">export CLANG_DIR=$LOCAL/clang8.0</span><br><span class="line">export PATH=$CLANG_DIR/bin:$PATH</span><br><span class="line">export LD_LIBRARY_PATH=$CLANG_DIR/lib:$LD_LIBRARY_PATH</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-安装vim-plug管理插件"><a href="#3-安装vim-plug管理插件" class="headerlink" title="3. 安装vim-plug管理插件"></a>3. 安装vim-plug管理插件</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">curl -fLo ~/.vim/autoload/plug.vim --create-dirs \</span><br><span class="line">    https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim</span><br></pre></td></tr></table></figure>
+
+<p>之后编辑<code>~/.vimrc</code>便可添加管理的插件，其格式如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&quot; vim插件下载目录</span><br><span class="line">call plug#begin(&#x27;~/.vim/plugged&#x27;)</span><br><span class="line"></span><br><span class="line">&quot; vim插件列表，对应github项目地址</span><br><span class="line">Plug &#x27;tpope/vim-sensible&#x27;</span><br><span class="line">Plug &#x27;junegunn/seoul256.vim&#x27;</span><br><span class="line"></span><br><span class="line">&quot; 结束列表</span><br><span class="line">call plug#end()</span><br></pre></td></tr></table></figure>
+
+<p>vim命令模式下<code>:PlugInstall</code>从github网址中克隆安装所有插件，<code>:PlugClean</code>卸载注释掉的插件列表。安装的插件会位于目录<code>~/.vim/plugged</code>下，如果要使用代理，可以手动克隆到该路径。</p>
+<h2 id="4-插件无关的vimrc配置"><a href="#4-插件无关的vimrc配置" class="headerlink" title="4. 插件无关的vimrc配置"></a>4. 插件无关的vimrc配置</h2><p>将下列代码添加在<code>~/.vimrc</code>中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line">&quot; 定义&lt;leader&gt;为分号，此行代码必须在插件配置代码之前</span><br><span class="line">let mapleader=&quot;;&quot;  </span><br><span class="line"></span><br><span class="line">&quot; 在处理未保存或只读文件的时候，弹出确认</span><br><span class="line">set confirm</span><br><span class="line">&quot; 自适应不同语言的智能缩进</span><br><span class="line">filetype indent on</span><br><span class="line">&quot; 设置编辑时制表符占用空格数</span><br><span class="line">set tabstop=4</span><br><span class="line">&quot; 设置格式化时制表符占用空格数</span><br><span class="line">set shiftwidth=4</span><br><span class="line">&quot; 将制表符扩展为空格</span><br><span class="line">set expandtab</span><br><span class="line">&quot; 让 vim 把连续数量的空格视为一个制表符</span><br><span class="line">&quot;set softtabstop=4</span><br><span class="line">&quot; 显示行号</span><br><span class="line">set number</span><br><span class="line">&quot;搜索忽略大小写</span><br><span class="line">&quot;set ignorecase</span><br><span class="line">&quot;搜索逐字符高亮</span><br><span class="line">set hlsearch</span><br><span class="line">set incsearch</span><br><span class="line">&quot; 使回格键（backspace）正常处理indent, eol, start等</span><br><span class="line">set backspace=2</span><br><span class="line">&quot; 允许backspace和光标键跨越行边界</span><br><span class="line">set whichwrap+=&lt;,&gt;,h,l</span><br><span class="line">&quot; 在被分割的窗口间显示空白，便于阅读</span><br><span class="line">set fillchars=vert:\ ,stl:\ ,stlnc:\</span><br><span class="line">&quot; 高亮显示匹配的括号</span><br><span class="line">set showmatch</span><br><span class="line">&quot; 匹配括号高亮的时间（单位是十分之一秒）</span><br><span class="line">set matchtime=1</span><br><span class="line">&quot; 光标移动到buffer的顶部和底部时保持3行距离</span><br><span class="line">set scrolloff=3</span><br><span class="line"></span><br><span class="line">&quot; 括号补全</span><br><span class="line">inoremap ( ()&lt;ESC&gt;i</span><br><span class="line">inoremap [ []&lt;LEFT&gt;</span><br><span class="line">inoremap &quot; &quot;&quot;&lt;ESC&gt;i</span><br><span class="line">inoremap &#x27; &#x27;&#x27;&lt;ESC&gt;i</span><br><span class="line">inoremap &#123; &#123;&#125;&lt;ESC&gt;i</span><br><span class="line">inoremap &#123;&lt;CR&gt; &#123;&lt;CR&gt;&#125;&lt;ESC&gt;O</span><br><span class="line"></span><br><span class="line">function! ClosePair(char)</span><br><span class="line">    if getline(&#x27;.&#x27;)[col(&#x27;.&#x27;) - 1] == a:char</span><br><span class="line">        return &quot;\&lt;Right&gt;&quot;</span><br><span class="line">    else</span><br><span class="line">        return a:char</span><br><span class="line">    endif</span><br><span class="line">endfunction</span><br><span class="line">                            </span><br><span class="line">inoremap ) &lt;c-r&gt;=ClosePair(&#x27;)&#x27;)&lt;CR&gt;</span><br><span class="line">inoremap &#125; &lt;c-r&gt;=ClosePair(&#x27;&#125;&#x27;)&lt;CR&gt;</span><br><span class="line">inoremap ] &lt;c-r&gt;=ClosePair(&#x27;]&#x27;)&lt;CR&gt;</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-总结"><a href="#5-总结" class="headerlink" title="5. 总结"></a>5. 总结</h2><p>本篇博客主要完成了gcc、python、cmake、vim、clang的升级&#x2F;安装，均采取了直接编译源码的方式，而像gcc和clang的源码编译非常耗时，python的源码编译虽然较快，但是test_weakref脚本的执行非常慢。</p>
+<p>编译源码的方式较为简单，但有些依赖项必须安装，否则找解决方法非常麻烦。</p>
+<p>最后安装了vim-plug作为插件管理器，并给出了插件无关的部分vimrc脚本。下一章节将着重介绍我个人常用的插件。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag"># 搭环境</a>
+              <a href="/tags/vim/" rel="tag"># vim</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/04/14/make-shared%E8%B0%83%E7%94%A8%E7%A7%81%E6%9C%89%E6%9E%84%E9%80%A0%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95/" rel="prev" title="make_shared调用私有构造函数的解决方法">
+      <i class="fa fa-chevron-left"></i> make_shared调用私有构造函数的解决方法
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/06/19/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-2-%E5%B8%B8%E7%94%A8%E7%9A%84vim%E6%8F%92%E4%BB%B6/" rel="next" title="我的vim开发环境搭建(2): 常用的vim插件">
+      我的vim开发环境搭建(2): 常用的vim插件 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%8D%87%E7%BA%A7gcc"><span class="nav-number">2.</span> <span class="nav-text">1. 升级gcc</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%8D%87%E7%BA%A7%E6%9F%90%E4%BA%9B%E8%BD%AF%E4%BB%B6"><span class="nav-number">3.</span> <span class="nav-text">2. 升级某些软件</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-%E5%AE%89%E8%A3%85Python-2-7-16"><span class="nav-number">3.1.</span> <span class="nav-text">2.1 安装Python 2.7.16</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-%E5%AE%89%E8%A3%85cmake-3-14-5"><span class="nav-number">3.2.</span> <span class="nav-text">2.2 安装cmake 3.14.5</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-3-%E5%AE%89%E8%A3%85vim-8-1"><span class="nav-number">3.3.</span> <span class="nav-text">2.3 安装vim 8.1</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-4-%E5%AE%89%E8%A3%85clang-8-0"><span class="nav-number">3.4.</span> <span class="nav-text">2.4 安装clang 8.0</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%89%E8%A3%85vim-plug%E7%AE%A1%E7%90%86%E6%8F%92%E4%BB%B6"><span class="nav-number">4.</span> <span class="nav-text">3. 安装vim-plug管理插件</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%8F%92%E4%BB%B6%E6%97%A0%E5%85%B3%E7%9A%84vimrc%E9%85%8D%E7%BD%AE"><span class="nav-number">5.</span> <span class="nav-text">4. 插件无关的vimrc配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">5. 总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

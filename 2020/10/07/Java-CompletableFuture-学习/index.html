@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 前言看了一段时间 Pulsar 代码，令人印象最深的就是整个异步处理都是基于 Java 8 引入的 CompletableFuture。作为 C++er 相对而言更为熟悉普通的 Future 和 Promise。Future 表示一个异步任务，即在 未来（future） 某个时间点完成的任务，而 Promise 则表示这个 Future 的完成状态（是否完成，以及完成结果正常的还是异常">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java CompletableFuture 学习">
+<meta property="og:url" content="http://yoursite.com/2020/10/07/Java-CompletableFuture-%E5%AD%A6%E4%B9%A0/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 前言看了一段时间 Pulsar 代码，令人印象最深的就是整个异步处理都是基于 Java 8 引入的 CompletableFuture。作为 C++er 相对而言更为熟悉普通的 Future 和 Promise。Future 表示一个异步任务，即在 未来（future） 某个时间点完成的任务，而 Promise 则表示这个 Future 的完成状态（是否完成，以及完成结果正常的还是异常">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-10-07T13:35:08.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.217Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/10/07/Java-CompletableFuture-%E5%AD%A6%E4%B9%A0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Java CompletableFuture 学习 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/10/07/Java-CompletableFuture-%E5%AD%A6%E4%B9%A0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java CompletableFuture 学习
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-10-07 21:35:08" itemprop="dateCreated datePublished" datetime="2020-10-07T21:35:08+08:00">2020-10-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>看了一段时间 Pulsar 代码，令人印象最深的就是整个异步处理都是基于 Java 8 引入的 <code>CompletableFuture</code>。作为 C++er 相对而言更为熟悉普通的 Future 和 Promise。Future 表示一个异步任务，即在 <strong>未来（future）</strong> 某个时间点完成的任务，而 Promise 则表示这个 <code>Future</code> 的完成状态（是否完成，以及完成结果正常的还是异常的）。因此 Promise 是绑定于某个 Future 的，一般而言，即可以等待 Future 自然完成，也可以提前操作 Promise 使得 Future 提前完成。</p>
+<p>Java 1.5 引入了 <code>Future</code>  接口，但过于简单。Java 8 提供<code>CompletableFuture</code>（下文简称 future）用起来则更像 Future 和 Promise 的结合，本文将通过简单的例子来稍微系统地学习下 <code>CompletableFuture</code>。</p>
+<h2 id="状态的访问和设置"><a href="#状态的访问和设置" class="headerlink" title="状态的访问和设置"></a>状态的访问和设置</h2><p>首先给出一个主线程使用 <code>CompletableFuture</code> 的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 创建一个 future，其返回结果是 Integer</span></span><br><span class="line">CompletableFuture&lt;Integer&gt; future = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">System.out.println(future.getNow(-<span class="number">1</span>)); <span class="comment">// -1</span></span><br><span class="line"><span class="comment">// 2. 使这个 future 完成</span></span><br><span class="line">future.complete(<span class="number">10</span>);</span><br><span class="line">System.out.println(future.getNow(-<span class="number">1</span>)); <span class="comment">// 10</span></span><br></pre></td></tr></table></figure>
+
+<p>涉及到的方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> T <span class="title function_">getNow</span><span class="params">(T valueIfAbsent)</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">complete</span><span class="params">(T value)</span>;</span><br></pre></td></tr></table></figure>
+
+<p>其中，<code>getNow()</code> 方法表示取得 Future 完成结果（如果未完成则返回 <code>valueIfAbsent</code>），默认创建的 future 是未完成的，因此第一次打印结果是 -1，第二次打印时由于调用了 <code>complete()</code> 方法使 future 完成了，因此 <code>getNow()</code> 取得了 <code>value</code> 并返回。</p>
+<p>对比一般的 <code>Future</code>，<code>CompletableFuture</code> 实现了完成状态的访问和设置，而 <code>Future</code> 只能通过 <code>get</code> 方法被动等待 future 完成（可以无限等待也可以设置超时），无法设置状态，要取得瞬时状态只能调用 <code>isDone()</code> 来判断是否完成，若完成，则可以安心调用 <code>get()</code> 避免阻塞。</p>
+<p>另外，除了设置返回结果（正常状态）外，还可以抛出异常（异常状态）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;Integer&gt; future = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line"><span class="comment">// 主动设置 future 为异常完成状态</span></span><br><span class="line">future.completeExceptionally(<span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;failed&quot;</span>));</span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    System.out.println(future.getNow(-<span class="number">1</span>));</span><br><span class="line">&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    System.out.println(<span class="string">&quot;Caused by &quot;</span> + e.getCause());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>涉及到的方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">completeExceptionally</span><span class="params">(Throwable ex)</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="在多线程的使用"><a href="#在多线程的使用" class="headerlink" title="在多线程的使用"></a>在多线程的使用</h2><p>一般的异步任务都会借助多线程来实现，避免主线程阻塞。类似于 <code>ExecutorService</code> 的  <code>execute()</code> 和 <code>submit()</code> 方法，<code>CompletableFuture</code> 也提供两种方法来分别执行无返回值和有返回值的任务：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;Void&gt; <span class="title function_">runAsync</span><span class="params">(Runnable runnable)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> asyncRunStage(asyncPool, runnable);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;U&gt; CompletableFuture&lt;U&gt; <span class="title function_">supplyAsync</span><span class="params">(Supplier&lt;U&gt; supplier)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> asyncSupplyStage(asyncPool, supplier);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中  <code>Supplier</code> 和 <code>Callable</code> 类似，都是实现了 <code>T get()</code> 的接口，区别在于前者没有异常声明。</p>
+<p>注意到这里都用到了 <code>asyncPool</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">boolean</span> <span class="variable">useCommonPool</span> <span class="operator">=</span></span><br><span class="line">    (ForkJoinPool.getCommonPoolParallelism() &gt; <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Default executor -- ForkJoinPool.commonPool() unless it cannot</span></span><br><span class="line"><span class="comment"> * support parallelism.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Executor</span> <span class="variable">asyncPool</span> <span class="operator">=</span> useCommonPool ?</span><br><span class="line">    ForkJoinPool.commonPool() : <span class="keyword">new</span> <span class="title class_">ThreadPerTaskExecutor</span>();</span><br></pre></td></tr></table></figure>
+
+<p>在合适的时候会使用 <code>ForkJoinPool</code> 框架去调度 future 对应的异步任务，也就是 future 和 thread 不一定是一对一的关系，从而支持了大量异步任务的调度。</p>
+<p>PS： <code>ForkJoinPool</code> 并不是本文的重点，之后再去学习。</p>
+<p>而 <code>runAsync</code> 和 <code>supplyAsync</code> 也都支持自定义 executor 的形式，即根据合适的场景提供自定义的线程池：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;Void&gt; <span class="title function_">runAsync</span><span class="params">(Runnable runnable,</span></span><br><span class="line"><span class="params">                                               Executor executor)</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;U&gt; CompletableFuture&lt;U&gt; <span class="title function_">supplyAsync</span><span class="params">(Supplier&lt;U&gt; supplier,</span></span><br><span class="line"><span class="params">                                                   Executor executor)</span>;</span><br></pre></td></tr></table></figure>
+
+<p>给出示例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;Void&gt; future1 = CompletableFuture.runAsync(() -&gt; System.out.println(<span class="string">&quot;future1 done&quot;</span>));</span><br><span class="line">CompletableFuture&lt;Void&gt; future2 = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    System.out.println(<span class="string">&quot;future2 done&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br><span class="line">CompletableFuture&lt;Integer&gt; future3 = CompletableFuture.supplyAsync(() -&gt; <span class="number">100</span>);</span><br></pre></td></tr></table></figure>
+
+<p>这里特地给出 <code>supplyAsync</code> 创建 <code>CompletableFuture&lt;Void&gt;</code> 的情况，由于 <code>Supplier</code> 接口的方法具有返回类型 <code>T</code>，因此必须显式返回 <code>null</code>。这也是我从 Scala 转向 Java 时一个比较不适应的地方，因为 Scala 不需要 <code>return</code> 语句就能返回结果（即最后一个表达式的返回值），而 Java 由于语法限制，这里必须显式返回。当然，直接创建 <code>Completable&lt;Void&gt;</code> 的时候用 <code>runAsync</code> 就好了，但是对于多个 future 的链式调用，有时候必须传入 <code>Supplier</code>，因此了解这点也很重要。</p>
+<p>另一个常见用法是兼容旧接口，比如原来的 API 是通过回调来表示任务完成的，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AsyncTask</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">run</span><span class="params">(Consumer&lt;String&gt; callback)</span> &#123;</span><br><span class="line">        <span class="keyword">final</span> <span class="type">String</span> <span class="variable">result</span> <span class="operator">=</span> compute();</span><br><span class="line">        <span class="keyword">if</span> (callback != <span class="literal">null</span>) &#123;</span><br><span class="line">            callback.accept(result);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String <span class="title function_">compute</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">/* 耗时操作... */</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;hello&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>那么，我们只要在 <code>Runnable</code> 中设置 future 状态即可：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">ExecutorService</span> <span class="variable">executor</span> <span class="operator">=</span> Executors.newSingleThreadExecutor();</span><br><span class="line">CompletableFuture&lt;String&gt; future = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">executor.execute(() -&gt; <span class="keyword">new</span> <span class="title class_">AsyncTask</span>().run(future::complete));</span><br></pre></td></tr></table></figure>
+
+<h2 id="多任务链式调用"><a href="#多任务链式调用" class="headerlink" title="多任务链式调用"></a>多任务链式调用</h2><h3 id="thenApply"><a href="#thenApply" class="headerlink" title="thenApply"></a>thenApply</h3><p>相比直接创建线程并结合 <code>join()</code>&#x2F;<code>detach()</code> 这种方法来执行异步任务，future 最为灵活的一点就是支持多个任务的组合，比如现在有个任务：</p>
+<ol>
+<li>进行服务发现；</li>
+<li>连接刚才发现的服务。</li>
+</ol>
+<p>第二步依赖于第一步的成功返回，执行同步任务时直接顺序写下来就行，但执行异步任务时，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;String&gt; serviceDiscoveryFuture = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="comment">/* 进行服务发现... */</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;http://localhost:8080&quot;</span>; <span class="comment">// 返回发现的 URL</span></span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>我们不能在这里直接等待 <code>serviceDiscoveryFuture</code> 完成，因为这样相当于异步操作就变成同步操作了，可能阻塞当前线程。</p>
+<p><code>CompletableFuture</code> 提供了一系列方法来进行链式调用，比如上面的任务可以写成：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;String&gt; connectServiceFuture = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="comment">/* 1. 服务发现... */</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;http://localhost:8080&quot;</span>;</span><br><span class="line">&#125;).thenApply((serverUrl) -&gt; &#123;</span><br><span class="line">    <span class="comment">/* 2. 连接服务... */</span></span><br><span class="line">    System.out.println(<span class="string">&quot;Connected to &quot;</span> + serverUrl);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>这样，只有第一个异步任务成功返回时才会将返回结果作为输入参数应用于第二个任务。</p>
+<p>看看 <code>thenApply</code> 的方法签名：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;U&gt; CompletableFuture&lt;U&gt; <span class="title function_">thenApply</span><span class="params">(Function&lt;? <span class="built_in">super</span> T,? extends U&gt; fn)</span>;</span><br></pre></td></tr></table></figure>
+
+<p>传入的是 <code>Function</code> 对象，也就是输入参数类型可以是 <code>T</code>（当前 future 的返回类型）的派生类，而返回类型则是 <code>U</code> 的派生类，通过 lambda 表达式中 <code>return</code> 的结果进行推导。</p>
+<h3 id="thenCompose"><a href="#thenCompose" class="headerlink" title="thenCompose"></a>thenCompose</h3><p>在一些异步任务已经被封装成返回 future 的方法时，<code>thenApply</code> 无法复用这些方法。</p>
+<p>在前一节的连接服务为例的基础上，用一个整型状态码表示连接的服务（返回 0 代表成功）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;String&gt; <span class="title function_">discoverServiceAsync</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="comment">/* 服务发现... */</span></span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.completedFuture(<span class="string">&quot;http://localhost:8080&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;Integer&gt; <span class="title function_">connectServiceAsync</span><span class="params">(String serviceUrl)</span> &#123;</span><br><span class="line">    <span class="comment">/* 连接服务... */</span></span><br><span class="line">    System.out.println(<span class="string">&quot;Connected to &quot;</span> + serviceUrl);</span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.completedFuture(<span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>PS：这里用了静态方法 <code>completedFuture</code> 来得到已完成的 future（默认构造的 future 是未完成的）。</p>
+<p>如果我们要添加第三步：对状态码进行处理，由于现有的方法都是返回 <code>CompletableFuture&lt;T&gt;</code> 而非 <code>T</code>，因此 <code>thenApply</code> 此时无能为力：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;Void&gt; future = discoverServiceAsync().thenAccept(serviceUrl -&gt; &#123;</span><br><span class="line">    CompletableFuture&lt;Integer&gt; statusFuture = connectServiceAsync(serviceUrl);</span><br><span class="line">    <span class="comment">// <span class="doctag">NOTE:</span> 无法处理 statusFuture</span></span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>此时 <code>thenCompose</code> 就有用武之地了：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;Integer&gt; future = discoverServiceAsync().thenCompose((serviceUrl) -&gt; &#123;</span><br><span class="line">    <span class="comment">/* ... */</span></span><br><span class="line">    <span class="keyword">return</span> connectServiceAsync(serviceUrl);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>再看看其方法签名：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;U&gt; CompletableFuture&lt;U&gt; <span class="title function_">thenCompose</span><span class="params">(</span></span><br><span class="line"><span class="params">    Function&lt;? <span class="built_in">super</span> T, ? extends CompletionStage&lt;U&gt;&gt; fn)</span> </span><br></pre></td></tr></table></figure>
+
+<p><code>CompletionStage</code> 接口表示异步处理的一个 <strong>阶段（stage）</strong>，而 <code>CompletableFuture</code> 实现了该接口（另一个实现的接口是 <code>Future</code>），因此该 <code>Function</code> 可以传入返回 <code>CompletableFuture</code> 的 lambda 表达式。</p>
+<p>也就是说 <code>thenCompose</code> 可以将返回的 stage 作为当前 future 的新 stage。上面得到的 <code>future</code> 会等到 <code>connectServiceAsync</code> 返回的 <code>CompletableFuture</code> 完成时才算完成。</p>
+<h3 id="异常处理"><a href="#异常处理" class="headerlink" title="异常处理"></a>异常处理</h3><p>前两节都是讨论 future 正常完成时的链式调用，虽然异常完成时在 future 调用 <code>get()</code> 时会抛出异常，但是有时候会对异常进行处理，比如：</p>
+<ol>
+<li>进行服务发现；</li>
+<li>若发现成功，连接服务；</li>
+<li>否则使用本地 HTTP 服务 <code>http://localhost:8080</code>。</li>
+</ol>
+<p>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> ExecutionException, InterruptedException &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">String</span> <span class="variable">name</span> <span class="operator">=</span> (args.length &gt; <span class="number">0</span>) ? args[<span class="number">0</span>] : <span class="string">&quot;unknown&quot;</span>;</span><br><span class="line">    CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">        <span class="keyword">if</span> (name.equals(<span class="string">&quot;pulsar&quot;</span>)) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot;pulsar://localhost:6650&quot;</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;Unknown server name: &quot;</span> + name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;).exceptionally(e -&gt; &#123;</span><br><span class="line">        System.out.println(e.getCause() + <span class="string">&quot;, use HTTP service&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;http://localhost:8080&quot;</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">    System.out.println(future.get());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>还是看看方法签名：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> CompletableFuture&lt;T&gt; <span class="title function_">exceptionally</span><span class="params">(Function&lt;Throwable, ? extends T&gt; fn)</span> </span><br></pre></td></tr></table></figure>
+
+<p>输入参数是抛出的异常，而返回类型则仍然是 future 泛型 <code>T</code> 的派生类。</p>
+<p>如果并不想对异常进行一些挽救的处理，只想打印下日志，那么可以返回 <code>null</code>，因为任何类型都可以被赋值为 <code>null</code>，此时推断的类型仍为 <code>T</code>。但对于这种情况，除了结合 <code>thenApply</code> 和 <code>exceptionally</code>，也可以使用 <code>whenComplete</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> (name.equals(<span class="string">&quot;pulsar&quot;</span>)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;pulsar://localhost:6650&quot;</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;Unknown server name: &quot;</span> + name);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;).whenComplete((serviceUrl, e) -&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> (e == <span class="literal">null</span>) &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;Connected to &quot;</span> + serviceUrl);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;Failed to connect to &quot;</span> + name + <span class="string">&quot;: &quot;</span> + e.getCause());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>看看方法签名：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> CompletableFuture&lt;T&gt; <span class="title function_">whenComplete</span><span class="params">(</span></span><br><span class="line"><span class="params">    BiConsumer&lt;? <span class="built_in">super</span> T, ? <span class="built_in">super</span> Throwable&gt; action)</span></span><br></pre></td></tr></table></figure>
+
+<p>传入的是接受返回结果和异常的 <code>BiConsumer</code>，缺点是无法针对异常进行挽救，future 调用 <code>get()</code> 方法仍然会抛出异常，而在 <code>exceptionally</code> 中对异常进行处理并返回 <code>null</code> 的话，之后 future 调用 <code>get()</code> 不会抛出异常，而只是返回 <code>null</code>。</p>
+<h2 id="合并并行异步任务的结果"><a href="#合并并行异步任务的结果" class="headerlink" title="合并并行异步任务的结果"></a>合并并行异步任务的结果</h2><p>链式调用解决的是串行异步任务，也就是一个异步任务的启动要依赖另一个异步任务的结果，但有时候会遇到并行的异步任务，比如对数组分块求和：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>[] array = &#123;<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>&#125;;</span><br><span class="line"><span class="type">int</span>[] indexes = &#123;<span class="number">0</span>, array.length / <span class="number">2</span>, array.length&#125;;</span><br><span class="line">List&lt;CompletableFuture&lt;Integer&gt;&gt; futures = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; indexes.length - <span class="number">1</span>; i++) &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">int</span> <span class="variable">start</span> <span class="operator">=</span> indexes[i];</span><br><span class="line">    <span class="keyword">final</span> <span class="type">int</span> <span class="variable">end</span> <span class="operator">=</span> indexes[i + <span class="number">1</span>];</span><br><span class="line">    futures.add(CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">sum</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">j</span> <span class="operator">=</span> start; j &lt; end; j++) &#123;</span><br><span class="line">            sum += array[j];</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> sum;</span><br><span class="line">    &#125;));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>现在要等待多个 <code>future</code> 完成，如果我们设置了超时时间比如 1 秒，那么要得到的结果实际上是 <code>List&lt;Integer&gt;</code>，此时可以用 <code>allOf</code> 方法将 future 列表转换成结果列表：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture.allOf(futures.toArray(<span class="keyword">new</span> <span class="title class_">CompletableFuture</span>[<span class="number">0</span>])).get();</span><br><span class="line">List&lt;Integer&gt; results =</span><br><span class="line">    futures.stream().map(future -&gt; future.getNow(-<span class="number">1</span>)).collect(Collectors.toList());</span><br><span class="line"><span class="comment">// results: [6, 15]</span></span><br></pre></td></tr></table></figure>
+
+<p>由于 <code>allOf</code> 返回的是 <code>CompletableFuture&lt;Void&gt;</code>，因此只能用来等待所有 future 完成或者其中一个失败。将结果重新组合成 <code>List</code> 还是得另外执行，看起来 Java 没有 Scala 的 <code>Future#sequence</code> 这样方便的方法。</p>
+<p>类似地，<code>anyOf</code> 则是等待任意一个 future 完成，这里就不给例子了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文简单学习了 Java 中 <code>CompletableFuture</code> 常用的使用场景，由于语法本身的限制，比起 Scala 的 <code>Future</code> 还是略显麻烦，但至少 <code>CompletableFuture</code> 的出现使得异步编程变得更加容易。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/09/03/Linux-C-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D-SIGKILL-%E9%97%AE%E9%A2%98/" rel="prev" title="Linux C++ 内存分配 SIGKILL 问题">
+      <i class="fa fa-chevron-left"></i> Linux C++ 内存分配 SIGKILL 问题
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/10/08/Pulsar-Protocol-Handler/" rel="next" title="Pulsar Protocol Handler">
+      Pulsar Protocol Handler <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%8A%B6%E6%80%81%E7%9A%84%E8%AE%BF%E9%97%AE%E5%92%8C%E8%AE%BE%E7%BD%AE"><span class="nav-number">2.</span> <span class="nav-text">状态的访问和设置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9C%A8%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="nav-number">3.</span> <span class="nav-text">在多线程的使用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A4%9A%E4%BB%BB%E5%8A%A1%E9%93%BE%E5%BC%8F%E8%B0%83%E7%94%A8"><span class="nav-number">4.</span> <span class="nav-text">多任务链式调用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#thenApply"><span class="nav-number">4.1.</span> <span class="nav-text">thenApply</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#thenCompose"><span class="nav-number">4.2.</span> <span class="nav-text">thenCompose</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86"><span class="nav-number">4.3.</span> <span class="nav-text">异常处理</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%90%88%E5%B9%B6%E5%B9%B6%E8%A1%8C%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1%E7%9A%84%E7%BB%93%E6%9E%9C"><span class="nav-number">5.</span> <span class="nav-text">合并并行异步任务的结果</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

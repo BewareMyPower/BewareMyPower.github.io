@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言最近一段时间写 Scala 比较多，虽然用传统的风格写代码也没问题，但 Scala 既然提供了比较方便的函数式编程方式，那么还是入乡随俗，好好利用比较好。 目前写下来几个感受最深的还是：尽量避免使用 var 和 mutable 数据结构。 上周末抽空看了下 Java 并发编程实战，基于锁和原子变量的线程安全实现虽然用起来很方便，但是一旦逻辑复杂了，锁住哪些变量，粒度多大，都会使代码变得比较复杂">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Scala 笔记 - 函数式编程风格初探">
+<meta property="og:url" content="http://yoursite.com/2020/01/07/Scala-%E7%AC%94%E8%AE%B0-%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E9%A3%8E%E6%A0%BC%E5%88%9D%E6%8E%A2/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言最近一段时间写 Scala 比较多，虽然用传统的风格写代码也没问题，但 Scala 既然提供了比较方便的函数式编程方式，那么还是入乡随俗，好好利用比较好。 目前写下来几个感受最深的还是：尽量避免使用 var 和 mutable 数据结构。 上周末抽空看了下 Java 并发编程实战，基于锁和原子变量的线程安全实现虽然用起来很方便，但是一旦逻辑复杂了，锁住哪些变量，粒度多大，都会使代码变得比较复杂">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-01-07T02:54:08.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.227Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Scala">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/01/07/Scala-%E7%AC%94%E8%AE%B0-%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E9%A3%8E%E6%A0%BC%E5%88%9D%E6%8E%A2/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Scala 笔记 - 函数式编程风格初探 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/01/07/Scala-%E7%AC%94%E8%AE%B0-%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E9%A3%8E%E6%A0%BC%E5%88%9D%E6%8E%A2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Scala 笔记 - 函数式编程风格初探
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-01-07 10:54:08" itemprop="dateCreated datePublished" datetime="2020-01-07T10:54:08+08:00">2020-01-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近一段时间写 Scala 比较多，虽然用传统的风格写代码也没问题，但 Scala 既然提供了比较方便的函数式编程方式，那么还是入乡随俗，好好利用比较好。</p>
+<p>目前写下来几个感受最深的还是：尽量避免使用 <code>var</code> 和 <code>mutable</code> 数据结构。</p>
+<p>上周末抽空看了下 <strong>Java 并发编程实战</strong>，基于锁和原子变量的线程安全实现虽然用起来很方便，但是一旦逻辑复杂了，锁住哪些变量，粒度多大，都会使代码变得比较复杂。而使用不可变（immutable）数据结构则能很大程度简化线程安全的实现（当然，锁和原子变量一定程度上还是需要的），因为不可变数据结构本身是线程安全的。</p>
+<p>此外，Scala 不提供原生的 <code>break</code> 和 <code>continue</code> 来进行流程控制，虽然可以通过导入模块的方式使用，但尽量还是避免。</p>
+<p>不过作为 C++er，有些地方从 C++ 转过来还是不太适应，因此记录一些笔记。</p>
+<h2 id="编程习惯的改变"><a href="#编程习惯的改变" class="headerlink" title="编程习惯的改变"></a>编程习惯的改变</h2><p>Scala 使用 <code>()</code> 来使用下标访问集合，而其它大多数语言都是使用 <code>[]</code>，比如用 C 风格代码遍历数组：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> array = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br><span class="line"><span class="keyword">for</span> (i &lt;- array.indices)</span><br><span class="line">  println(array(i)) <span class="comment">// array(i) 而非 array[i]</span></span><br></pre></td></tr></table></figure>
+
+<p>原因很简单，因为 Scala 使用 <code>[]</code> 来指定泛型，而其它语言比如 C++ 和 Java 都是使用 <code>&lt;&gt;</code>，Scala 的 <code>&lt;</code> 和 <code>&gt;</code> 都有各自用法：</p>
+<ul>
+<li><code>&lt;-</code>：用于 for 循环，左边的引用为右边集合的遍历；</li>
+<li><code>-&gt;</code>：二元元组的定义，左边为 key，右边为 value；</li>
+<li><code>=&gt;</code>：定义<strong>函数</strong>（而非方法），左边是参数列表，右边是函数体；</li>
+<li><code>&lt;=</code>：嗯？这是小于或等于的意思。笑话出自<a target="_blank" rel="noopener" href="https://www.zhihu.com/question/19748408/answer/264461050">Scala 是一门怎样的语言，具有哪些优缺点？ - 颜巍的回答 - 知乎</a></li>
+</ul>
+<p>Scala 有比其它大部分语言更为强大的 for 循环，比如：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> map = <span class="type">Map</span>(<span class="number">1</span> -&gt; <span class="string">&quot;Java&quot;</span>, <span class="number">2</span> -&gt; <span class="string">&quot;C&quot;</span>, <span class="number">3</span> -&gt; <span class="string">&quot;Python&quot;</span>, <span class="number">4</span> -&gt; <span class="string">&quot;C++&quot;</span>)</span><br><span class="line"><span class="keyword">for</span> ((key, value) &lt;- map <span class="keyword">if</span> value.matches(<span class="string">&quot;C.*&quot;</span>))</span><br><span class="line">  println(<span class="string">s&quot;<span class="subst">$key</span> =&gt; <span class="subst">$value</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>打印出 value 以 C 开头的键值对，当然，Scala 也可以使用传统函数式编程常用的 <code>map</code>，<code>filter</code> 等方法构成调用链：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">map.filter(_._2.matches(<span class="string">&quot;C.*&quot;</span>)).foreach &#123; <span class="keyword">case</span> (key, value) =&gt;</span><br><span class="line">  println(<span class="string">s&quot;<span class="subst">$key</span> =&gt; <span class="subst">$value</span>&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意这里的 <code>_2</code> 是取得元组（前面说 <code>-&gt;</code> 提到了二元元组）的第 2 个元素。两者是基于 Scala 强大的模式匹配（<code>match</code>）的，并且都用语法糖省略了多余代码。</p>
+<p>这里由于仅仅是处理每个元素，因此用了 <code>foreach</code>，如果需要得到结果，比如将 <code>println</code> 打印的字符串构成数组或链表，就可以用 <code>map</code>，然后用 <code>mkString</code> 将换行符作为分隔符即可实现一样的功能：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> list = map.filter(_._2.matches(<span class="string">&quot;C.*&quot;</span>)).map &#123; <span class="keyword">case</span> (key, value) =&gt; <span class="string">s&quot;<span class="subst">$key</span> =&gt; <span class="subst">$value</span>&quot;</span> &#125;</span><br><span class="line">println(list.mkString(<span class="string">&quot;\n&quot;</span>))</span><br></pre></td></tr></table></figure>
+
+<p>因此 <code>map</code> 可谓最常用的方法了，前面说了，多线程访问共享的可变数据结构时存在 race condition，而如果使用 <code>map</code> 将共享的不可变数据结构映射为线程内部可见的另一个不可变数据结构时，则避免了 race condition，也不用麻烦地去加锁来解决，加锁还要考虑锁的粒度，还要谨慎思考粒度太小会不会导致线程不安全了。</p>
+<p>当然，作为 C++er 的一个坏习惯就是过早优化，比如担心拷贝和内存多次分配的开销会不会太大。</p>
+<p>然而实践起来，很多时候性能的瓶颈是网络延迟，磁盘 I&#x2F;O，算法处理速度这些因素，而不是拷贝和内存分配。有些拷贝也是必要的，用 C++ 写，不加锁要实现线程安全，也得拷贝一份，至于内存分配，JVM 的 GC 经过一代代发展已经相当强大了。</p>
+<p>这里不是说性能不重要，而是说，性能导致问题之前，编写不易出 BUG 的代码优先级更高。</p>
+<h2 id="流程控制"><a href="#流程控制" class="headerlink" title="流程控制"></a>流程控制</h2><p>比如，从 N 台副本服务器上取数据，只要成功取得一份就返回，因此不需要并行操作，而是循环依次去访问服务器，这里给几个模拟实际场景的变量和方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> servers = <span class="type">Seq</span>(<span class="string">&quot;Server1&quot;</span>, <span class="string">&quot;Server2&quot;</span>, <span class="string">&quot;Server3&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">type</span> <span class="title">DataType</span> </span>= <span class="type">String</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getDataFromServer</span></span>(server: <span class="type">String</span>): <span class="type">DataType</span> = &#123;</span><br><span class="line">  <span class="keyword">if</span> (server.contains(<span class="string">&quot;2&quot;</span>)) <span class="string">&quot;Ok&quot;</span> <span class="keyword">else</span> <span class="string">&quot;&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="return-vs-break"><a href="#return-vs-break" class="headerlink" title="return vs break"></a>return vs break</h3><p>使用 <code>return</code> 单独写个方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getData</span></span>: <span class="type">DataType</span> = &#123;</span><br><span class="line">  <span class="keyword">for</span> (server &lt;- servers) &#123;</span><br><span class="line">    <span class="keyword">val</span> data = getDataFromServer(server)</span><br><span class="line">    <span class="keyword">if</span> (data.nonEmpty)</span><br><span class="line">      <span class="keyword">return</span> data</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="string">&quot;&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里的 <code>for (server &lt;- servers) &#123;</code> 也可以换成 <code>servers.foreach &#123; server =&gt;</code>，看个人喜好。</p>
+<p>当然也可以用 <code>break</code>，首先 <code>import scala.util.control.Breaks</code>，然后代码改成：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> data: <span class="type">DataType</span> = <span class="string">&quot;&quot;</span></span><br><span class="line">breakable &#123;</span><br><span class="line">  servers.foreach &#123; server =&gt;</span><br><span class="line">    data = getDataFromServer(server)</span><br><span class="line">    <span class="keyword">if</span> (data.nonEmpty)</span><br><span class="line">      <span class="keyword">break</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>这种方式仅仅是举例，实际写代码应该避免</strong>。除了少写一个函数外，没任何好处。</p>
+<ol>
+<li><p>是破坏了不用<code>var</code> 的原则，虽然在这里并没有什么影响，但很容易让人逐渐依赖于 <code>var</code>;</p>
+</li>
+<li><p>Scala 使用 <code>break</code> 本来就比其它语言的 <code>break</code> 要复杂，多了外层的 <code>breakable</code> 块；</p>
+</li>
+<li><p>底层是用异常来实现的：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">BreakControl</span> <span class="keyword">extends</span> <span class="title">ControlThrowable</span></span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Breaks</span> </span>&#123;</span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> breakException = <span class="keyword">new</span> <span class="type">BreakControl</span></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">breakable</span></span>(op: =&gt; <span class="type">Unit</span>) &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      op</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> ex: <span class="type">BreakControl</span> =&gt;</span><br><span class="line">        <span class="keyword">if</span> (ex ne breakException) <span class="keyword">throw</span> ex</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">break</span></span>(): <span class="type">Nothing</span> = &#123; <span class="keyword">throw</span> breakException &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，如果在 <code>breakable</code> 块中处理异常时，还得额外捕获 <code>ControlThrowable</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">breakable &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 调用了 break 的代码（略）</span></span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">ControlThrowable</span> =&gt; <span class="keyword">throw</span> e <span class="comment">// 抛给外层来流程控制</span></span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; <span class="comment">// <span class="doctag">TODO:</span> 处理真正的异常</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p>总之，<code>break</code> 仅仅是让习惯了其它语言的用户方便上手而已。</p>
+<h3 id="尾递归"><a href="#尾递归" class="headerlink" title="尾递归"></a>尾递归</h3><p>之前 <code>foreach</code> 的做法还是避免不了 return 跳出循环，实际上 Scala 提供了尾递归优化，这里不详述，简单说就是将特殊条件下函数的递归调用优化替换成循环调用，并且无法优化的场景利用 <code>tailrec</code> 注解会抛出异常说明此处无法尾递归优化。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@scala</span>.annotation.tailrec</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getData</span></span>(servers: <span class="type">Seq</span>[<span class="type">String</span>]): <span class="type">DataType</span> = &#123;</span><br><span class="line">  servers <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">Seq</span>() =&gt; <span class="string">&quot;&quot;</span></span><br><span class="line">    <span class="keyword">case</span> <span class="type">Seq</span>(server, rest@_*) =&gt;</span><br><span class="line">      <span class="keyword">val</span> data = getDataFromServer(server)</span><br><span class="line">      <span class="keyword">if</span> (data.nonEmpty)</span><br><span class="line">        data</span><br><span class="line">      <span class="keyword">else</span></span><br><span class="line">        getData(rest.toSeq)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码利用了 Scala 强大的模式匹配能力。</p>
+<p>第一行的 <code>case Seq()</code> 匹配空 <code>Seq</code>，也就是递归终止条件。</p>
+<p>第二行的需要说明的是 <code>rest@_*</code>，进行匹配的是 <code>_*</code>，<code>_</code> 匹配类型，而 <code>*</code> 在 Scala 中则是匹配可变参数列表。前面在通过 <code>@</code> 运算符将匹配到的可变参数列表绑定到变量 <code>rest</code> 上。</p>
+<p>这里的主要好处还是略去了 <code>return</code>，在其它语言中 <code>return</code> 的一个好处是提前返回来避免 N 层缩进的难以阅读的代码。不过另一方面，<code>return</code> 的滥用会导致程序流程不是那么清晰，因为代码太长的话不知道前面哪里会直接 <code>return</code>了。不过其实说起来，这里的 <code>return</code> 是用在单独的方法中，相当于被隐藏了，也不会导致跳出方法外层的循环，可读性并不受影响。</p>
+<p>一开始我是认为尾递归的方式比 <code>return</code> 更好，当时最大原因错以为 <code>return</code> 会抛出 <code>ControlThrowable</code> 来进行流程控制导致外层的 <code>try-catch</code> 需要额外处理这个异常，后来发现并不会抛出。因此在这里使用尾递归+模式匹配某种程度上有点炫技的意味。</p>
+<p>另外，如果 <code>servers</code> 类型是 <code>List</code> 则可以用这种尾递归方式：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@scala</span>.annotation.tailrec</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getData</span></span>(servers: <span class="type">List</span>[<span class="type">String</span>]): <span class="type">DataType</span> = &#123;</span><br><span class="line">  servers <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">Nil</span> =&gt; <span class="string">&quot;&quot;</span></span><br><span class="line">    <span class="keyword">case</span> server :: rest =&gt;</span><br><span class="line">      <span class="keyword">val</span> data = getDataFromServer(server)</span><br><span class="line">      <span class="keyword">if</span> (data.nonEmpty)</span><br><span class="line">        data</span><br><span class="line">      <span class="keyword">else</span></span><br><span class="line">        getData(rest) <span class="comment">// tail recursion</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Future-的处理"><a href="#Future-的处理" class="headerlink" title="Future 的处理"></a>Future 的处理</h2><p>Scala 可以用 Java 的线程设施来编写多线程程序，但是内置的 <code>Future</code> 一般情况下够用和好用了，最近用到的 <a target="_blank" rel="noopener" href="https://www.playframework.com/documentation/2.8.x/ScalaWS">play framework WS 模块</a>，<code>Post</code> 和 <code>Get</code> 方法返回的都是 <code>Future</code>。</p>
+<p>一般情况下 <code>Future</code> 用 <code>onComplete</code> 方法，利用回调函数来处理正常返回或者异常发送的场景：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> s = <span class="string">&quot;hello&quot;</span></span><br><span class="line"><span class="keyword">val</span> future = <span class="type">Future</span> &#123;</span><br><span class="line">  <span class="keyword">if</span> (s.length % <span class="number">2</span> == <span class="number">0</span>)</span><br><span class="line">    s.length</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">Exception</span>(<span class="string">s&quot;&quot;</span><span class="string">&quot;&quot;</span>$<span class="string">s&quot;&#x27;s length is not even&quot;</span><span class="string">&quot;&quot;</span>)</span><br><span class="line">&#125;</span><br><span class="line">future.onComplete &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Failure</span>(e) =&gt; <span class="comment">// <span class="doctag">TODO:</span> 处理 future 抛出的异常</span></span><br><span class="line">  <span class="keyword">case</span> <span class="type">Success</span>(result) =&gt; <span class="comment">// <span class="doctag">TODO:</span> 处理 future 的结果，这里即字符串长度</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意 <code>Future</code> 底层还是使用线程池的，因此需要导入 <code>ExecutionContext</code>，一般用默认的就行：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scala.concurrent.<span class="type">ExecutionContext</span>.<span class="type">Implicits</span>.global</span><br></pre></td></tr></table></figure>
+
+<p>但是有些时候还是需要等待 <code>Future</code> 完成的，这里不回顾 <code>Future</code> 的语法，而是谈一些同步方面的处理。</p>
+<h3 id="等待多个-Future-结束"><a href="#等待多个-Future-结束" class="headerlink" title="等待多个 Future 结束"></a>等待多个 Future 结束</h3><p>比如最常见的分块计算，然后将结果汇总：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> array = (<span class="number">1</span> to <span class="number">10</span>).toArray</span><br><span class="line"><span class="keyword">val</span> blockSize = <span class="number">3</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> blocks = (array.indices by blockSize).map &#123; i =&gt; (i, i + blockSize) &#125;.map &#123; pair =&gt;</span><br><span class="line">  <span class="keyword">if</span> (pair._2 &lt;= array.length) pair <span class="keyword">else</span> pair._1 -&gt; array.length</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">val</span> futures = blocks.map &#123; <span class="keyword">case</span> (from, to) =&gt;</span><br><span class="line">  <span class="type">Future</span>(array.slice(from, to).sum)</span><br><span class="line">&#125; <span class="comment">// Seq[Future[Int]]</span></span><br></pre></td></tr></table></figure>
+
+<p>现在得到了 <code>Future[Int]</code> 的序列，可以用回调函数的方法将结果存入一个 <code>ConcurrentHashMap</code></p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 修改了 Future 的定义，加入了 from 作为 key</span></span><br><span class="line"><span class="keyword">val</span> futures = blocks.map &#123; <span class="keyword">case</span> (from, to) =&gt;</span><br><span class="line">  <span class="type">Future</span>(from -&gt; array.slice(from, to).sum)</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">val</span> results = <span class="keyword">new</span> <span class="type">ConcurrentHashMap</span>[<span class="type">Int</span>, <span class="type">Int</span>]()</span><br><span class="line">futures.foreach &#123; future =&gt;</span><br><span class="line">  future.onComplete &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">Failure</span>(e) =&gt; <span class="comment">// <span class="doctag">TODO:</span> 处理单个计算错误的异常</span></span><br><span class="line">    <span class="keyword">case</span> <span class="type">Success</span>((from, sum)) =&gt; results.put(from, sum)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="type">Thread</span>.sleep(<span class="number">100</span>) <span class="comment">// 模拟主线程做其它操作</span></span><br><span class="line"><span class="keyword">while</span> (futures.size != blocks.size) &#123; <span class="comment">// 无事可做了，轮询等待</span></span><br><span class="line">  <span class="type">Thread</span>.sleep(<span class="number">100</span>)</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">val</span> sum = results.entrySet().asScala.map(_.getValue).sum</span><br></pre></td></tr></table></figure>
+
+<p>注意 <code>asScala</code> 将 Java 的集合类型转换成 Scala 对应的集合类型，在 Scala 2.13 之前需要：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scala.collection.<span class="type">JavaConverters</span>._</span><br></pre></td></tr></table></figure>
+
+<p>从 Scala 2.13 开始则是导入另一个包：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scala.jdk.<span class="type">CollectionConverters</span>._</span><br></pre></td></tr></table></figure>
+
+<p>PS：本文默认都是 Scala 2.8 以上。</p>
+<p>回正题，如果主线程不需要做其他操作，就只想等待，那么这种基于回调的方式就未免过于麻烦，不如直接等待。但是 <code>Await.result</code> 或者 <code>Await.ready</code> 只能等待单个 <code>Future</code>，于是得 for 循环等待，然后还是得将结果一个个存入 <code>HashMap</code> 或者其它容器中。</p>
+<p><code>Future</code> 类提供了 <code>sequence()</code> 方法来简化这个操作，直接一行搞定：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> sum = <span class="type">Await</span>.result(<span class="type">Future</span>.sequence(futures), <span class="number">2.</span>seconds).sum</span><br></pre></td></tr></table></figure>
+
+<p>注意 <code>seconds</code> 需要导入相关包：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scala.concurrent.duration._</span><br></pre></td></tr></table></figure>
+
+<p><code>sequence</code> 方法将 <code>Future[A]</code> 的集合转换成 <code>A</code> 的集合的 <code>Future</code>，在这里即将<code>Seq[Future[Int]]</code> 转换成了 <code>Future[Seq[Int]]</code>，这样直接等待就行了。</p>
+<h3 id="任务的顺序执行"><a href="#任务的顺序执行" class="headerlink" title="任务的顺序执行"></a>任务的顺序执行</h3><p>有时候一个任务需要等待另一个任务完成后才能执行，此时可以用 <code>Future</code> 的 <code>map</code> 或 <code>flatMap</code> 方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> f1 = <span class="type">Future</span> &#123; <span class="number">1</span> &#125;</span><br><span class="line"><span class="keyword">val</span> f2 = f1.map &#123; _ * <span class="number">2</span>&#125;</span><br><span class="line"><span class="keyword">val</span> f3 = f2.map &#123; _ * <span class="number">3</span>&#125;</span><br><span class="line"><span class="keyword">val</span> result = <span class="type">Await</span>.result(f3, <span class="number">10.</span>milliseconds)</span><br></pre></td></tr></table></figure>
+
+<p><code>map</code> 方法接收的 block 是将结果类型映射到结果类型，但是 <code>flatMap</code> 方法是将结果类型映射到结果类型的 <code>Future</code>，有时候外部方法返回的是 <code>Future</code> 类型，此时就得用 <code>flatMap</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 模拟外部的接口，比如 PlayWS</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getResponse</span></span>(x: <span class="type">Int</span>) = <span class="type">Future</span> &#123;</span><br><span class="line">  x * <span class="number">2</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> f1 = <span class="type">Future</span> &#123; <span class="number">1</span> &#125;</span><br><span class="line"><span class="keyword">val</span> f2 = f1.flatMap(getResponse)</span><br><span class="line"><span class="keyword">val</span> result = <span class="type">Await</span>.result(f2, <span class="number">10.</span>milliseconds)</span><br><span class="line">println(result)</span><br></pre></td></tr></table></figure>
+
+<p>假如任务数量不确定，也就回到前文提到的类型，多个服务器，取到一个就退出：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> servers = <span class="type">List</span>(<span class="string">&quot;Server1&quot;</span>, <span class="string">&quot;Server2&quot;</span>, <span class="string">&quot;Server3&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getResponseFromServer</span></span>(server: <span class="type">String</span>) = <span class="type">Future</span> &#123;</span><br><span class="line">  <span class="keyword">if</span> (server.contains(<span class="string">&quot;2&quot;</span>)) <span class="string">&quot;Ok&quot;</span> <span class="keyword">else</span> <span class="string">&quot;&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里可以用类似前文尾递归的方法得到新 <code>Future</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getResponse</span></span>(servers: <span class="type">List</span>[<span class="type">String</span>]): <span class="type">Future</span>[<span class="type">String</span>] = servers <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Nil</span> =&gt; <span class="type">Future</span> &#123; <span class="string">&quot;&quot;</span> &#125;</span><br><span class="line">  <span class="keyword">case</span> server :: rest =&gt;</span><br><span class="line">    getResponseFromServer(server).flatMap &#123; result =&gt;</span><br><span class="line">      <span class="keyword">if</span> (result.nonEmpty)</span><br><span class="line">        <span class="type">Future</span> &#123; result &#125;</span><br><span class="line">      <span class="keyword">else</span></span><br><span class="line">        getResponse(rest)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> result = <span class="type">Await</span>.result(getResponse(servers), <span class="number">10.</span>milliseconds)</span><br></pre></td></tr></table></figure>
+
+<p>这里无法用尾递归，因为递归调用发生在 <code>flatMap</code> 接收的 block 中，而非当前方法末尾。</p>
+<p>如果把该方法做成同步调用就行了，因为反正要等待，不如直接每次 <code>Future</code> 都等待：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@scala</span>.annotation.tailrec</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getResponse</span></span>(servers: <span class="type">List</span>[<span class="type">String</span>]): <span class="type">String</span> = servers <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Nil</span> =&gt; <span class="string">&quot;&quot;</span></span><br><span class="line">  <span class="keyword">case</span> server :: rest =&gt;</span><br><span class="line">    <span class="keyword">val</span> result = <span class="type">Await</span>.result(getResponseFromServer(server), <span class="number">10.</span>milliseconds)</span><br><span class="line">    <span class="keyword">if</span> (result.nonEmpty)</span><br><span class="line">      result</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      getResponse(rest)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> result = getResponse(servers)</span><br></pre></td></tr></table></figure>
+
+<p>这也是我在项目里实际采用的做法，这种做法有个缺点就是不便于扩展，如果返回 <code>Future</code>，那么如果以后要用到 <code>getResponse</code> 的结果，直接 <code>map</code> 或 <code>flatMap</code> 即可，但是现在的话，就必须同步等待 <code>getResponse</code> 完成了。</p>
+<p>但是考虑到基本上没有进一步扩展的需求，目前就保持这样了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文算是最近写 Scala 时的一些笔记，其实学 Scala 主要是为了看 Kafka 源码，Kafka 的 Scala 代码其实很多还是并不那么函数式的，毕竟很大一块基础设施还是 Java 写的然后 Scala 来调用，当然，不否认不少地方也用了函数式编程来节省代码和增加可读性。</p>
+<p>比如在 1.1.0 版本的 <code>ReplicaManager.scala</code> 中，有一段代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> errorReadingData = logReadResultValues.foldLeft(<span class="literal">false</span>) ((errorIncurred, readResult) =&gt;</span><br><span class="line">  errorIncurred || (readResult.error != <span class="type">Errors</span>.<span class="type">NONE</span>))</span><br></pre></td></tr></table></figure>
+
+<p><code>foldLeft</code> 之前只用过一遍，所以看到这里根本不知道什么意思，实际上等价于</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> errorReadingData = <span class="literal">false</span></span><br><span class="line">logReadResultValues.foreach &#123; readResult =&gt;</span><br><span class="line">  errorReadingData = (errorReadingData || (readResult.error != <span class="type">Errors</span>.<span class="type">NONE</span>))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是 <code>logReadResultValues</code> 中存在一个元素的 <code>error</code> 字段为 <code>Errors.NONE</code> 则为 false。当然，其实存在一个就可以 break 或 return 了，但后面继续循环也不会有什么显著性开销，所以用 <code>foldLeft</code> 非常简洁有效地实现了功能。重要的还是没有使用 <code>var</code>。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Scala/" rel="tag"># Scala</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/11/22/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB08-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97%E7%9A%84%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0/" rel="prev" title="Kafka源码阅读08: 写入本地日志的具体实现">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读08: 写入本地日志的具体实现
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/01/13/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB09-Fetch%E8%AF%B7%E6%B1%82/" rel="next" title="Kafka源码阅读09: Fetch请求">
+      Kafka源码阅读09: Fetch请求 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BC%96%E7%A8%8B%E4%B9%A0%E6%83%AF%E7%9A%84%E6%94%B9%E5%8F%98"><span class="nav-number">2.</span> <span class="nav-text">编程习惯的改变</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B5%81%E7%A8%8B%E6%8E%A7%E5%88%B6"><span class="nav-number">3.</span> <span class="nav-text">流程控制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#return-vs-break"><span class="nav-number">3.1.</span> <span class="nav-text">return vs break</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B0%BE%E9%80%92%E5%BD%92"><span class="nav-number">3.2.</span> <span class="nav-text">尾递归</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Future-%E7%9A%84%E5%A4%84%E7%90%86"><span class="nav-number">4.</span> <span class="nav-text">Future 的处理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%AD%89%E5%BE%85%E5%A4%9A%E4%B8%AA-Future-%E7%BB%93%E6%9D%9F"><span class="nav-number">4.1.</span> <span class="nav-text">等待多个 Future 结束</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BB%BB%E5%8A%A1%E7%9A%84%E9%A1%BA%E5%BA%8F%E6%89%A7%E8%A1%8C"><span class="nav-number">4.2.</span> <span class="nav-text">任务的顺序执行</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

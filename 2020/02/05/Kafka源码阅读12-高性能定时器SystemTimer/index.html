@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言前一篇阅读了时间轮 TimingWheel 的实现，遗留了两个重要问题：  时间轮中被插入延迟队列的桶，何时被移除？ 高层时间轮运转时，定时任务何时被插入低层时间轮？  实际上，在 kafka.utils.timer 包的类中，真正暴露给其它包的只有 SystemTimer，而且注解为 @threadsafe（线程安全），时间轮 TimingWheel 只不过是它的一个字段，本身注解也是 @n">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读12: 高性能计时器SystemTimer">
+<meta property="og:url" content="http://yoursite.com/2020/02/05/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB12-%E9%AB%98%E6%80%A7%E8%83%BD%E5%AE%9A%E6%97%B6%E5%99%A8SystemTimer/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言前一篇阅读了时间轮 TimingWheel 的实现，遗留了两个重要问题：  时间轮中被插入延迟队列的桶，何时被移除？ 高层时间轮运转时，定时任务何时被插入低层时间轮？  实际上，在 kafka.utils.timer 包的类中，真正暴露给其它包的只有 SystemTimer，而且注解为 @threadsafe（线程安全），时间轮 TimingWheel 只不过是它的一个字段，本身注解也是 @n">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-02-05T11:22:54.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.222Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/02/05/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB12-%E9%AB%98%E6%80%A7%E8%83%BD%E5%AE%9A%E6%97%B6%E5%99%A8SystemTimer/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读12: 高性能计时器SystemTimer | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/02/05/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB12-%E9%AB%98%E6%80%A7%E8%83%BD%E5%AE%9A%E6%97%B6%E5%99%A8SystemTimer/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读12: 高性能计时器SystemTimer
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-02-05 19:22:54" itemprop="dateCreated datePublished" datetime="2020-02-05T19:22:54+08:00">2020-02-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>前一篇阅读了时间轮 <code>TimingWheel</code> 的实现，遗留了两个重要问题：</p>
+<ol>
+<li>时间轮中被插入延迟队列的桶，何时被移除？</li>
+<li>高层时间轮运转时，定时任务何时被插入低层时间轮？</li>
+</ol>
+<p>实际上，在 <code>kafka.utils.timer</code> 包的类中，真正暴露给其它包的只有 <code>SystemTimer</code>，而且注解为 <code>@threadsafe</code>（线程安全），时间轮 <code>TimingWheel</code> 只不过是它的一个字段，本身注解也是 <code>@nonthreadsafe</code>（非线程安全）。<code>SystemTimer</code> 实现了接口 <code>Timer</code>，是基于 Kafka 时间轮设计的高性能定时器。</p>
+<h2 id="构造"><a href="#构造" class="headerlink" title="构造"></a>构造</h2><h3 id="字段含义"><a href="#字段含义" class="headerlink" title="字段含义"></a>字段含义</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SystemTimer</span>(<span class="params">executorName: <span class="type">String</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                  tickMs: <span class="type">Long</span> = 1,</span></span></span><br><span class="line"><span class="params"><span class="class">                  wheelSize: <span class="type">Int</span> = 20,</span></span></span><br><span class="line"><span class="params"><span class="class">                  startMs: <span class="type">Long</span> = <span class="type">Time</span>.<span class="type">SYSTEM</span>.hiResClockMs</span>) <span class="keyword">extends</span> <span class="title">Timer</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 线程池（任务执行器），固定大小为 1，也就是同时只能执行最多一个任务</span></span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> taskExecutor = <span class="type">Executors</span>.newFixedThreadPool(<span class="number">1</span>, <span class="keyword">new</span> <span class="type">ThreadFactory</span>() &#123;</span><br><span class="line">    <span class="comment">// 自定义线程创建方式：非守护线程，指定 executorName 作为线程名后缀</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">newThread</span></span>(runnable: <span class="type">Runnable</span>): <span class="type">Thread</span> =</span><br><span class="line">      <span class="type">KafkaThread</span>.nonDaemon(<span class="string">&quot;executor-&quot;</span>+executorName, runnable)</span><br><span class="line">  &#125;)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> delayQueue = <span class="keyword">new</span> <span class="type">DelayQueue</span>[<span class="type">TimerTaskList</span>]()</span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> taskCounter = <span class="keyword">new</span> <span class="type">AtomicInteger</span>(<span class="number">0</span>)</span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> timingWheel = <span class="keyword">new</span> <span class="type">TimingWheel</span>(</span><br><span class="line">    tickMs = tickMs,</span><br><span class="line">    wheelSize = wheelSize,</span><br><span class="line">    startMs = startMs,</span><br><span class="line">    taskCounter = taskCounter,</span><br><span class="line">    delayQueue</span><br><span class="line">  )</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 读写锁，保护时间轮运转（tick）时的相关数据结构</span></span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> readWriteLock = <span class="keyword">new</span> <span class="type">ReentrantReadWriteLock</span>()</span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> readLock = readWriteLock.readLock()</span><br><span class="line">  <span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> writeLock = readWriteLock.writeLock()</span><br></pre></td></tr></table></figure>
+
+<p>主构造器 4 个参数第一个用于指定线程名称，后面三个用于构造时间轮。此外，所有时间轮（包括各个桶）共享一个延迟队列和任务计数器。<strong>多层时间轮共享的延迟队列</strong>就是这里的 <code>delayQueue</code>，调用 <code>poll</code> 时会将过期的桶弹出队列。</p>
+<h3 id="细节-1：高精度时间戳计时"><a href="#细节-1：高精度时间戳计时" class="headerlink" title="细节 1：高精度时间戳计时"></a>细节 1：高精度时间戳计时</h3><p>注意到 <code>startMs</code> 是通过 <code>System.nanoTime()</code> 转换得到的高精度纳秒级时间戳：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">Time</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="type">Time</span> <span class="variable">SYSTEM</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SystemTime</span>();</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">SystemTime</span> <span class="keyword">implements</span> <span class="title class_">Time</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">long</span> <span class="title function_">milliseconds</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> System.currentTimeMillis();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">long</span> <span class="title function_">hiResClockMs</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> TimeUnit.NANOSECONDS.toMillis(nanoseconds());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">long</span> <span class="title function_">nanoseconds</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> System.nanoTime();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>之所以使用 <code>nanoTime</code> 是为了高精度计时，但是由于纳秒级时间戳超过了 64位 整型能表达的上限，所以得到的是溢出值（还有可能为负数），只能用于计算两个时间戳的时间间隔，而不能用作时间戳。因此在记录时间戳（比如 <code>Produce</code> 请求得到 <code>LogAppendTime</code> 时）以及对时间间隔精确性不敏感的地方都是用的 <code>currentMilliseconds</code> 方法计时。</p>
+<h3 id="细节-2：KafkaThread"><a href="#细节-2：KafkaThread" class="headerlink" title="细节 2：KafkaThread"></a>细节 2：<code>KafkaThread</code></h3><p>Java 线程池屏蔽了线程的细节，用户只要提供了实现 <code>Runnable</code> 的类，即可通过 <code>execute</code> 或 <code>submit</code> 方法创建线程。出于灵活性考虑，Java 线程池也支持用户自定义 <code>ThreadFactory</code> 接口，实现 <code>newThread</code> 通过 <code>Runnable</code> 对象创建线程的方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> KafkaThread <span class="title function_">nonDaemon</span><span class="params">(<span class="keyword">final</span> String name, Runnable runnable)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">KafkaThread</span>(name, runnable, <span class="literal">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">KafkaThread</span><span class="params">(<span class="keyword">final</span> String name, Runnable runnable, <span class="type">boolean</span> daemon)</span> &#123;</span><br><span class="line">    <span class="built_in">super</span>(runnable, name);</span><br><span class="line">    configureThread(name, daemon);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">configureThread</span><span class="params">(<span class="keyword">final</span> String name, <span class="type">boolean</span> daemon)</span> &#123;</span><br><span class="line">    setDaemon(daemon);</span><br><span class="line">    setUncaughtExceptionHandler(<span class="keyword">new</span> <span class="title class_">UncaughtExceptionHandler</span>() &#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">uncaughtException</span><span class="params">(Thread t, Throwable e)</span> &#123;</span><br><span class="line">            log.error(<span class="string">&quot;Uncaught exception in thread &#x27;&#123;&#125;&#x27;:&quot;</span>, name, e);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里是通过 <code>KafkaThread</code> 类（位于 <code>org.apache.kafka.common.utils</code> 包下）的工厂方法创建的，关键的是设置了异常处理器，当线程函数中抛出意想不到的异常时，将其写入错误日志。</p>
+<p>但是，仅当 <code>Runnable</code> 对象由 <code>execute</code> 执行时才会调用这个处理器，因为 <code>submit</code> 执行 <code>Runnable</code> 会返回 <code>Future&lt;?&gt;</code> 对象，只有调用 <code>Future</code> 对象的 <code>get</code> 方法时才会触发异常，这样用户就可以手动 <code>try-catch</code> 捕获异常，而不用自定义异常处理器。</p>
+<p>而在 <code>SystemTimer</code> 中，任务是使用 <code>submit</code> 执行的，并且未处理返回的 <code>Future</code> 对象：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">taskExecutor.submit(timerTaskEntry.timerTask)</span><br></pre></td></tr></table></figure>
+
+<p>因此，虽然 <code>KafkaThread</code> 设置了异常处理器，但是在这里，定时任务抛出的异常实际上被忽略了。</p>
+<h2 id="Timer-接口实现"><a href="#Timer-接口实现" class="headerlink" title="Timer 接口实现"></a>Timer 接口实现</h2><h3 id="接口概览"><a href="#接口概览" class="headerlink" title="接口概览"></a>接口概览</h3><p><code>SystemTimer</code> 是基于 <code>TimingWheel</code> 实现的定时器，对外提供的功能即它所实现的接口 <code>Timer</code>:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Timer</span> </span>&#123;</span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">    * 添加新的任务到当前执行器（线程池），在任务过期后会执行任务。</span></span><br><span class="line"><span class="comment">    * @param timerTask 待添加的任务</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(timerTask: <span class="type">TimerTask</span>): <span class="type">Unit</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">    * 推进内部时钟，执行任何在走过的时间间隔内过期的任务</span></span><br><span class="line"><span class="comment">    * @param timeoutMs</span></span><br><span class="line"><span class="comment">    * @return 是否有任务被执行</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">advanceClock</span></span>(timeoutMs: <span class="type">Long</span>): <span class="type">Boolean</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 取得待执行的任务数量</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">size</span></span>: <span class="type">Int</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 关闭定时器服务，待执行的任务将不会被执行</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">shutdown</span></span>(): <span class="type">Unit</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>size</code> 和 <code>shutdown</code> 的实现很简单，分别是取得 <code>taskCounter</code> 的值以及关闭线程池。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">size</span></span>: <span class="type">Int</span> = taskCounter.get</span><br><span class="line"></span><br><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">shutdown</span></span>() &#123;</span><br><span class="line">  taskExecutor.shutdown()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="add"><a href="#add" class="headerlink" title="add"></a><code>add</code></h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(timerTask: <span class="type">TimerTask</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  readLock.lock()</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="comment">// 通过任务的延时加上当前时间得到延时的具体时刻，作为定时任务的过期时间</span></span><br><span class="line">    addTimerTaskEntry(<span class="keyword">new</span> <span class="type">TimerTaskEntry</span>(timerTask, timerTask.delayMs + <span class="type">Time</span>.<span class="type">SYSTEM</span>.hiResClockMs))</span><br><span class="line">  &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    readLock.unlock()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">addTimerTaskEntry</span></span>(timerTaskEntry: <span class="type">TimerTaskEntry</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="comment">// 尝试将任务加入时间轮</span></span><br><span class="line">  <span class="keyword">if</span> (!timingWheel.add(timerTaskEntry)) &#123;</span><br><span class="line">    <span class="comment">// 仅当 任务已经过期 或者 任务主动取消 才会进入此分支</span></span><br><span class="line">    <span class="keyword">if</span> (!timerTaskEntry.cancelled) <span class="comment">// 任务过期则执行任务</span></span><br><span class="line">      taskExecutor.submit(timerTaskEntry.timerTask)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其实就是将任务扔进时间轮中，添加失败只有可能是过期或者主动取消，这里额外判断了是否任务主动取消。</p>
+<p>唯一值得注意的是这里用了读锁，按照常理，<code>add</code> 并不是读操作而是写操作，为什么是读锁呢？读锁意味着可以多线程同时调用 <code>add</code> 时无需上锁。这是因为 <code>TimingWheel.add</code> 是线程安全的，回顾下时间轮添加任务的流程：</p>
+<ol>
+<li><p>判断任务是否被取消</p>
+<p>任务绑定的 <code>Entry</code> 是 <code>private[this]</code> 修饰的，也就是仅有当前对象能访问。因此只要不是两个相同任务，那么这个判断是线程安全的</p>
+</li>
+<li><p>判断过期时间处于那个桶，是否需要加入更高一级时间轮</p>
+<p>所有桶的时间范围由 <code>currentTime</code>（即取整后的 <code>startMs</code>）、<code>tickMs</code>、<code>wheelSize</code> 决定的，而 <code>add</code> 方法并不会修改它们</p>
+</li>
+<li><p>将任务添加进桶：<code>TimeTaskList.add</code> 内部用内置锁保护了，线程安全；</p>
+</li>
+<li><p>设置桶的过期时间：调用原子变量的 <code>getAndSet</code> 方法，也是线程安全的。</p>
+</li>
+</ol>
+<p>保证线程安全的策略是要么不修改内部状态，要么调用那些线程安全的方法，因此允许并发地 <code>add</code>。</p>
+<h3 id="advanceClock"><a href="#advanceClock" class="headerlink" title="advanceClock"></a><code>advanceClock</code></h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">advanceClock</span></span>(timeoutMs: <span class="type">Long</span>): <span class="type">Boolean</span> = &#123;</span><br><span class="line">  <span class="comment">// 尝试在 timeoutMs 内取出完成的任务</span></span><br><span class="line">  <span class="keyword">var</span> bucket = delayQueue.poll(timeoutMs, <span class="type">TimeUnit</span>.<span class="type">MILLISECONDS</span>)</span><br><span class="line">  <span class="keyword">if</span> (bucket != <span class="literal">null</span>) &#123; <span class="comment">// 取出了过期的 bucket</span></span><br><span class="line">    writeLock.lock()</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="keyword">while</span> (bucket != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="comment">// 推进当前时间轮，内部可能会递归推进更高一层时间轮，currentTime 被修改</span></span><br><span class="line">        timingWheel.advanceClock(bucket.getExpiration())</span><br><span class="line">        <span class="comment">// 取出 bucket 所有任务节点，将其传入 reinsert 方法</span></span><br><span class="line">        bucket.flush(reinsert)</span><br><span class="line">        <span class="comment">// 非阻塞地取出任务，将当前时点所有过期的 bucket 全部取出</span></span><br><span class="line">        bucket = delayQueue.poll()</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">      writeLock.unlock()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="literal">true</span></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123; <span class="comment">// 没有 bucket 过期</span></span><br><span class="line">    <span class="literal">false</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>推进 <code>timeoutMs</code> 毫秒，尽可能取出此时所有过期的 bucket（<strong>问题 1 解决</strong>），然后调用 <code>flush</code> 将 bucket 中所有任务节点传入 <code>reinsert</code>。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flush</span></span>(f: (<span class="type">TimerTaskEntry</span>)=&gt;<span class="type">Unit</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  synchronized &#123;</span><br><span class="line">    <span class="keyword">var</span> head = root.next</span><br><span class="line">    <span class="keyword">while</span> (head ne root) &#123;</span><br><span class="line">      remove(head)</span><br><span class="line">      f(head)</span><br><span class="line">      head = root.next</span><br><span class="line">    &#125;</span><br><span class="line">    expiration.set(<span class="number">-1</span>L)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>TimerTaskList.flush</code> 方法很简单，用内置锁保护，然后依次删除链表（bucket）所有节点，并应用到函数上，最后重置 <code>expiration</code> 以保证下次有任务加入该 bucket 时，该 bucket 会被加入延迟队列。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">val</span> reinsert = (timerTaskEntry: <span class="type">TimerTaskEntry</span>) =&gt; addTimerTaskEntry(timerTaskEntry)</span><br></pre></td></tr></table></figure>
+
+<p><code>reinsert</code> 则是尝试将这些从 bucket 中删除的节点重新加入时间轮。</p>
+<p>这里需要注意， bucket 过期时，内部节点也都过期了，因为 bucket 的过期时间是所有内部过期时间取整后得到的被 <code>tickMs</code> 整除的值。那为什么要这么做呢？</p>
+<p>回顾我们开始提出的问题 2，如果取出的这个 bucket 是属于高层时间轮的，由于高层时间轮精度不够，此时 bucket 可能并未过期。</p>
+<p>举个两层时间轮的例子（单位：毫秒）：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>buckets</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>[0,1)</code> <code>[1,2)</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>[0,2)</code> <code>[2,4)</code></td>
+</tr>
+</tbody></table>
+<p>初始状态下，延时为 3 的任务被加入 <code>[2,4)</code>，调用 <code>advanceClock(2)</code> 后，时间轮变成了</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>buckets</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>[2,3)</code> <code>[3,4)</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>[2,4)</code> <code>[4,6)</code></td>
+</tr>
+</tbody></table>
+<p>第 2 层的 <code>[2,4)</code> 被取出，然后延时为 3 的任务被取出，此时调用 <code>reinsert</code> 就会将其加入第 1 层的 <code>[3,4)</code>，而不是立刻判断它过期。至此，<strong>问题 2 解决</strong>，从高层时间轮降级到底层时间轮被隐藏在了这句不起眼的 <code>bucket.flush(reinsert)</code> 中。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本章阅读了 Kafka 高精度定时器 <code>SystemTimer</code> 的实现，它管理了延迟队列和时间轮，每次加入定时任务将任务扔进时间轮中，并将任务节点所在的 bucket 扔进延迟队列中。它本身的推进是通过延迟队列进行的，每次推进一段时间，尽可能取出到期的 bucket，并依次取出 bucket 的所有任务节点。通过将取出的任务节点重新加入到时间轮中，可能会将高层时间轮中过期任务转移到底层时间轮中。</p>
+<p>此外，对于到期的任务，<code>SystemTimer</code> 使用仅包含单线程的线程池执行，若推进时又多个任务节点被取出，会等待前一个任务对应的线程完成后才会继续执行该任务（复用这个线程）。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/02/04/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB11-%E6%97%B6%E9%97%B4%E8%BD%AETimingWheel/" rel="prev" title="Kafka源码阅读11: 时间轮TimingWheel">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读11: 时间轮TimingWheel
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/07/14/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9-rpath-%E7%9A%84%E5%BA%94%E7%94%A8%E5%92%8C%E5%8E%9F%E7%90%86/" rel="next" title="链接选项 rpath 的应用和原理">
+      链接选项 rpath 的应用和原理 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9E%84%E9%80%A0"><span class="nav-number">2.</span> <span class="nav-text">构造</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AD%97%E6%AE%B5%E5%90%AB%E4%B9%89"><span class="nav-number">2.1.</span> <span class="nav-text">字段含义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%86%E8%8A%82-1%EF%BC%9A%E9%AB%98%E7%B2%BE%E5%BA%A6%E6%97%B6%E9%97%B4%E6%88%B3%E8%AE%A1%E6%97%B6"><span class="nav-number">2.2.</span> <span class="nav-text">细节 1：高精度时间戳计时</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BB%86%E8%8A%82-2%EF%BC%9AKafkaThread"><span class="nav-number">2.3.</span> <span class="nav-text">细节 2：KafkaThread</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Timer-%E6%8E%A5%E5%8F%A3%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.</span> <span class="nav-text">Timer 接口实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8E%A5%E5%8F%A3%E6%A6%82%E8%A7%88"><span class="nav-number">3.1.</span> <span class="nav-text">接口概览</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#add"><span class="nav-number">3.2.</span> <span class="nav-text">add</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#advanceClock"><span class="nav-number">3.3.</span> <span class="nav-text">advanceClock</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

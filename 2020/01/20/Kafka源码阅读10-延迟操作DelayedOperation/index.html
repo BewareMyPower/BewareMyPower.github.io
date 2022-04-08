@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言之前阅读了 Produce 和 Fetch 请求的实现，对于需要耗时处理的网络请求，都是利用 DelayedOperation 和 DelayedOperationPurgatory 来进行异步延迟操作，防止阻塞 KafkaRequestHandler 线程。 比如处理 Produce 请求时，ReplicaManager.appendRecords 方法在 ack 为 -1，有数据发送且有至">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读10: 延迟操作DelayedOperation">
+<meta property="og:url" content="http://yoursite.com/2020/01/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB10-%E5%BB%B6%E8%BF%9F%E6%93%8D%E4%BD%9CDelayedOperation/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言之前阅读了 Produce 和 Fetch 请求的实现，对于需要耗时处理的网络请求，都是利用 DelayedOperation 和 DelayedOperationPurgatory 来进行异步延迟操作，防止阻塞 KafkaRequestHandler 线程。 比如处理 Produce 请求时，ReplicaManager.appendRecords 方法在 ack 为 -1，有数据发送且有至">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-01-20T06:10:18.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.222Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/01/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB10-%E5%BB%B6%E8%BF%9F%E6%93%8D%E4%BD%9CDelayedOperation/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读10: 延迟操作DelayedOperation | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/01/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB10-%E5%BB%B6%E8%BF%9F%E6%93%8D%E4%BD%9CDelayedOperation/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读10: 延迟操作DelayedOperation
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-01-20 14:10:18" itemprop="dateCreated datePublished" datetime="2020-01-20T14:10:18+08:00">2020-01-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>之前阅读了 Produce 和 Fetch 请求的实现，对于需要耗时处理的网络请求，都是利用 <code>DelayedOperation</code> 和 <code>DelayedOperationPurgatory</code> 来进行异步延迟操作，防止阻塞 <code>KafkaRequestHandler</code> 线程。</p>
+<p>比如处理 Produce 请求时，<code>ReplicaManager.appendRecords</code> 方法在 ack 为 -1，有数据发送且有至少有一个分区的 append 操作成功时：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> delayedProduce = <span class="keyword">new</span> <span class="type">DelayedProduce</span>(timeout, produceMetadata, <span class="keyword">this</span>, responseCallback, delayedProduceLock)</span><br><span class="line"><span class="keyword">val</span> producerRequestKeys = entriesPerPartition.keys.map(<span class="keyword">new</span> <span class="type">TopicPartitionOperationKey</span>(_)).toSeq</span><br><span class="line">delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)</span><br></pre></td></tr></table></figure>
+
+<p>再比如，处理 Fetch 请求时，<code>ReplicaManager.fetchMessages</code> 方法在 timeout 大于 0，读取本地数据没出错且响应积攒的字节数足够多时：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> delayedFetch = <span class="keyword">new</span> <span class="type">DelayedFetch</span>(timeout, fetchMetadata, <span class="keyword">this</span>, quota, isolationLevel, responseCallback)</span><br><span class="line"><span class="keyword">val</span> delayedFetchKeys = fetchPartitionStatus.map &#123; <span class="keyword">case</span> (tp, _) =&gt; <span class="keyword">new</span> <span class="type">TopicPartitionOperationKey</span>(tp) &#125;</span><br><span class="line">delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)</span><br></pre></td></tr></table></figure>
+
+<p>用法很类似，首先创建 DelayedXXX 对象，然后对每个分区都创建 <code>TopicPartitionOperationKey</code> 对象组成 <code>Seq</code>，将两者传入 purgatory 中进行 tryXXX 操作，从命名和注释可以猜到，这个操作是尝试完全请求，就像 Scala 的 <code>Promise</code> 类的 <code>tryComplete</code> 方法一样，异步操作的常见模式就是下面两个非阻塞操作：</p>
+<ol>
+<li>启动一个任务异步执行，然后当前线程该干嘛干嘛；</li>
+<li>想要确认任务是否执行结束时，看一眼，如果结束了就取得结果。</li>
+</ol>
+<p>不过除了确认操作（Operation）是否完成外，还会在没有完成的时候，监控（Watch）相应的延迟操作。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">tryCompleteElseWatch</span></span>(operation: <span class="type">T</span>, watchKeys: <span class="type">Seq</span>[<span class="type">Any</span>]): <span class="type">Boolean</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* used by delayed-produce and delayed-fetch operations */</span></span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">TopicPartitionOperationKey</span>(<span class="params">topic: <span class="type">String</span>, partition: <span class="type">Int</span></span>) <span class="keyword">extends</span> <span class="title">DelayedOperationKey</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">this</span></span>(topicPartition: <span class="type">TopicPartition</span>) = <span class="keyword">this</span>(topicPartition.topic, topicPartition.partition)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">keyLabel</span> </span>= <span class="string">&quot;%s-%d&quot;</span>.format(topic, partition)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实际上 Key 可以是任意类型，只要实现了 <code>keyLabel</code> 方法，主题和分区组成的 Key 是用于延迟的 Produce 和 Fetch 操作，而对于其它请求&#x2F;操作则用的其它类型的 Key，比如 JoinGroup 操作用 group id 和 consumer id 组成 Key。</p>
+<p>通过前面的源码阅读可知，Produce 和 Fetch 请求全程都是按照分区去处理，也就是每个分区对应一个类型，然后对这个类型进行 map, filter 等等，所以这里传入 purgatory 的 key 可以唯一标识延迟处理的数据，比如 Fetch 操作中需要处理的 <code>FetchMetadata</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">FetchMetadata</span>(<span class="params">/* 其它字段... */</span></span></span><br><span class="line"><span class="params"><span class="class">                         // key: 分区; value: 获取分区的状态</span></span></span><br><span class="line"><span class="params"><span class="class">                         fetchPartitionStatus: <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">FetchPartitionStatus</span></span>)]) </span></span><br></pre></td></tr></table></figure>
+
+<h2 id="DelayOperation"><a href="#DelayOperation" class="headerlink" title="DelayOperation"></a>DelayOperation</h2><h3 id="主要方法"><a href="#主要方法" class="headerlink" title="主要方法"></a>主要方法</h3><p>首先看看 <code>DelayedOperationPurgatory</code> 类及其 <code>tryCompleteElseWatch</code> 方法的完整签名</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">DelayedOperationPurgatory</span>[<span class="type">T</span> &lt;: <span class="type">DelayedOperation</span>](<span class="params">/* ... */</span>)</span></span><br><span class="line">        <span class="keyword">extends</span> <span class="type">Logging</span> <span class="keyword">with</span> <span class="type">KafkaMetricsGroup</span> &#123;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">tryCompleteElseWatch</span></span>(operation: <span class="type">T</span>, watchKeys: <span class="type">Seq</span>[<span class="type">Any</span>]): <span class="type">Boolean</span></span><br></pre></td></tr></table></figure>
+
+<p>参数 1 是泛型参数 <code>T</code>，该类型必须继承自 <code>DelayedOperation</code>，该类型是抽象类</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">DelayedOperation</span>(<span class="params">override val delayMs: <span class="type">Long</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">    lockOpt: <span class="type">Option</span>[<span class="type">Lock</span>] = <span class="type">None</span></span>) <span class="keyword">extends</span> <span class="title">TimerTask</span> <span class="keyword">with</span> <span class="title">Logging</span> </span>&#123;</span><br></pre></td></tr></table></figure>
+
+<p>设置了毫秒级延时 <code>delayMs</code> 以及可选的锁 <code>lockOpt</code>。要实现一个延迟操作，也就是继承 <code>DelayedOperation</code> 类并重写（override）以下抽象方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 回调: 当延迟操作过期时执行, 因此 delayMs 到期时会强制完成</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">onExpiration</span></span>(): <span class="type">Unit</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 回调: 当操作完成时执行</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">onComplete</span></span>(): <span class="type">Unit</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 检查现在操作是否已经完成:</span></span><br><span class="line"><span class="comment">// 1. 已完成, 则调用 forceComplete() 并返回 true 如果 forceComplete 返回 true;</span></span><br><span class="line"><span class="comment">// 2. 否则返回 false</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">tryComplete</span></span>(): <span class="type">Boolean</span></span><br></pre></td></tr></table></figure>
+
+<p>此外提供了原子 <code>Boolean</code> 类型的字段来标识是否完成</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> completed = <span class="keyword">new</span> <span class="type">AtomicBoolean</span>(<span class="literal">false</span>)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">isCompleted</span></span>: <span class="type">Boolean</span> = completed.get()</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">forceComplete</span></span>(): <span class="type">Boolean</span> = &#123;</span><br><span class="line">  <span class="keyword">if</span> (completed.compareAndSet(<span class="literal">false</span>, <span class="literal">true</span>)) &#123;</span><br><span class="line">    cancel() <span class="comment">// 调用基类 TimerTask 的方法取消当前定时任务</span></span><br><span class="line">    onComplete() <span class="comment">// 执行派生类自定义的回调</span></span><br><span class="line">    <span class="literal">true</span></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="literal">false</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>该原子变量是在 <code>forceComplete</code> 中设置为 true 的，可能有多个线程尝试完成同一个任务，由于是执行原子 <code>Boolean</code> 的 CAS 操作，只有第一个线程会返回 true，<code>onComplete()</code> 回调只会被调用一次。</p>
+<p>前面的注释也提过，简单查看 <code>DelayedProduce</code> 和 <code>DelayedFetch</code> 的 <code>tryComplete()</code> 实现也能看到，每个代表任务已完成的分支，都会将 <code>forceComplete()</code> 的返回值作为 <code>tryComplete()</code> 的返回值。</p>
+<p>此外，基类 <code>TimerTask</code> 继承自 <code>Runnable</code> 接口，因此 <code>DelayedOperation</code> 可以作为线程被启动，执行 <code>run()</code> 方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">run</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="keyword">if</span> (forceComplete())</span><br><span class="line">    onExpiration()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果任务未完成，则强制完成（期间会执行 <code>onComplete</code> 回调），并执行 <code>onExpiration</code> 回调。相当于多了个对超时的处理，因此可以猜测会在过期时启动线程来执行超时回调。</p>
+<h3 id="maybeTryComplete"><a href="#maybeTryComplete" class="headerlink" title="maybeTryComplete"></a>maybeTryComplete</h3><p>该方法是 server 包私有的</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[server] <span class="function"><span class="keyword">def</span> <span class="title">maybeTryComplete</span></span>(): <span class="type">Boolean</span> = &#123;</span><br><span class="line">  <span class="keyword">var</span> retry = <span class="literal">false</span></span><br><span class="line">  <span class="keyword">var</span> done = <span class="literal">false</span></span><br><span class="line">  <span class="keyword">do</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (lock.tryLock()) &#123;</span><br><span class="line">      <span class="comment">// 上锁成功, 直接调用 tryComplete</span></span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        tryCompletePending.set(<span class="literal">false</span>)</span><br><span class="line">        done = tryComplete()</span><br><span class="line">      &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        lock.unlock()</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">// 此时可能另外一个线程调用了 `maybeTryComplete` 并将 `tryCompletePending` 置为 true(在此之前已经设为了 false)</span></span><br><span class="line">      <span class="comment">// 因此 retry 为 true 就代表这种情况发生, 此时会触发重试条件, 继续 while 循环</span></span><br><span class="line">      retry = tryCompletePending.get()</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123; <span class="comment">// 上锁失败, 说明另一个线程持有锁</span></span><br><span class="line">      <span class="comment">// 如果此时 `tryCompletePending` 为 true, 那么持锁线程必然看到了 true 并且重试, 那么当前线程可以退出。</span></span><br><span class="line">      <span class="comment">// 否则持锁线程正在 `tryComplete`, 此时将其设为 true 因为持锁线程可能在 `tryCompletePending` 设为 true 的时候返回</span></span><br><span class="line">      retry = !tryCompletePending.getAndSet(<span class="literal">true</span>)</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">while</span> (!isCompleted &amp;&amp; retry)</span><br><span class="line">  done</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>看起来有点绕，分情况讨论。</p>
+<ol>
+<li>单线程：调用 <code>tryComplete</code> 后退出循环，因为自己将 <code>tryCompletePending</code> 置为了 false，解锁后<code>retry</code> 为false，此时和直接 <code>tryComplete</code> 无异；</li>
+<li>双线程：记为 A 和 B，假设 A 上锁成功，且在 <code>tryComplete</code> 检查完成状态的时候 B 上锁失败，那么 B 将 <code>tryCompletePending</code> 置为 true，这会导致两种情况：<ul>
+<li>A <code>tryComplete</code> 成功，代表 <code>onComplete</code> 已被调用，<code>isCompleted</code> 为 true，A 和 B 都会退出循环；</li>
+<li>A <code>tryComplete</code> 失败，<code>isCompleted</code> 为 false，由于 <code>tryCompletePending</code> 被 B 置为 false，A 的 <code>retry</code> 为 true，而由于不存在其它等待线程，所以 B 在 <code>getAndSet</code> 时得到的值（赋给 <code>retry</code>）也是 true，A 和 B 重新争夺锁，也就是说至少会再调用一次 <code>tryComplete</code>。</li>
+</ul>
+</li>
+<li>三个以上线程：存在 1 个持锁线程和 N 个等待线程（N &gt; 1），<code>getAndSet</code> 是原子操作，也就是说 N 个等待线程只有 1 个等待线程的 <code>retry</code> 会被置为 true，其它线程都因为第一个调用 <code>getAndSet</code> 的等待线程将 <code>tryCompletePending</code> 置为 false 时退出，此时和双线程的情况无异。</li>
+</ol>
+<p>核心就是双线程的情况，这种做法是为了针对这种场景：线程 A 检查完成状态的时候，此时还未完成，而线程 B 检查完成状态的时候，虽然实际已经完成了，但由于线程 A 正持有锁，B 不会检查状态。这种做法能让无论线程 A 还是 B，都会再调用一次 <code>tryComplete</code> 检查是否完成了。</p>
+<p>举个例子，假设状态由 1 个 <code>Boolean</code> 表示，只有都为 <code>true</code> 时才算完成。如果不这么设计，那就可能出现下面的情况：</p>
+<table>
+<thead>
+<tr>
+<th>时刻</th>
+<th>状态</th>
+<th>线程 A</th>
+<th>线程 B</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>false</td>
+<td>上锁</td>
+<td></td>
+</tr>
+<tr>
+<td>2</td>
+<td>false</td>
+<td>取得状态 false</td>
+<td></td>
+</tr>
+<tr>
+<td>3</td>
+<td>true</td>
+<td>判断状态（已经是旧的状态）是否为 true</td>
+<td>上锁失败，不检查状态</td>
+</tr>
+<tr>
+<td>4</td>
+<td>true</td>
+<td>返回 false</td>
+<td>返回 false</td>
+</tr>
+</tbody></table>
+<p>而现在的做法就是在第 4 步，让线程 A 和 B 再次竞争 <code>tryComplete</code> 的机会，至少有一个线程能检查新的状态。</p>
+<h2 id="TimerTask"><a href="#TimerTask" class="headerlink" title="TimerTask"></a>TimerTask</h2><p><code>DelayedOperation.forceComplete</code> 有一个关键的 <code>cancel()</code> 调用来自于基类 <code>TimerTask</code>，从源码注释可知，这个方法是取消 timeout 计时器，即强行停止耗时超过 <code>delayedMs</code> 的延时任务。这个方法是在基类 <code>TimerTask</code> 中实现的。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[<span class="keyword">this</span>] <span class="keyword">var</span> timerTaskEntry: <span class="type">TimerTaskEntry</span> = <span class="literal">null</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">cancel</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">  synchronized &#123;</span><br><span class="line">    <span class="keyword">if</span> (timerTaskEntry != <span class="literal">null</span>) timerTaskEntry.remove()</span><br><span class="line">    timerTaskEntry = <span class="literal">null</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实际上是调用了 <code>TimerTaskEntry.remove</code> 方法</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[timer] <span class="class"><span class="keyword">class</span> <span class="title">TimerTaskEntry</span>(<span class="params">val timerTask: <span class="type">TimerTask</span>, val expirationMs: <span class="type">Long</span></span>) <span class="keyword">extends</span> <span class="title">Ordered</span>[<span class="type">TimerTaskEntry</span>] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="meta">@volatile</span></span><br><span class="line">  <span class="keyword">var</span> list: <span class="type">TimerTaskList</span> = <span class="literal">null</span></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">remove</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">var</span> currentList = list</span><br><span class="line">    <span class="comment">// 如果另一个线程将当前节点从一个链表移动到另一个链表，由于 list 会被修改成新链表的引用</span></span><br><span class="line">    <span class="comment">// 所以 remove 会失败，因此在这里用 currentList 暂存之前链表的引用，这样就避免锁住整个 list</span></span><br><span class="line">    <span class="comment">// 单线程: list.remove(this) 会将 this.list 置为 null, 移除后退出循环；</span></span><br><span class="line">    <span class="comment">// 多线程: 如果 this.list 被其它线程修改指向了新的链表, 那么循环会继续, 将该节点从新链表移除</span></span><br><span class="line">    <span class="comment">// 一个罕见场景: 线程 B 将该节点从链表 A 移除加入链表 B, 但是在修改节点的 list 之前, 线程 A</span></span><br><span class="line">    <span class="comment">// 就移除成功了, 获取的 list 为 null, 退出循环, 之后线程 B 将节点加入链表 B</span></span><br><span class="line">    <span class="keyword">while</span> (currentList != <span class="literal">null</span>) &#123;</span><br><span class="line">      currentList.remove(<span class="keyword">this</span>)</span><br><span class="line">      currentList = list</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>TimerTaskEntry</code> 是 <code>TimerTaskList</code> （定时任务链表）上的一个<strong>节点（Entry）</strong>，内部维护了链表的引用，调用 <code>remove</code> 即将当前节点从链表上移除。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">remove</span></span>(timerTaskEntry: <span class="type">TimerTaskEntry</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  synchronized &#123; <span class="comment">// 保护多线程 remove 和 add</span></span><br><span class="line">    timerTaskEntry.synchronized &#123; <span class="comment">// 保护单个节点的 add 和 remove</span></span><br><span class="line">      <span class="keyword">if</span> (timerTaskEntry.list eq <span class="keyword">this</span>) &#123; <span class="comment">// 确认当前节点还在当前链表上才移除</span></span><br><span class="line">        timerTaskEntry.next.prev = timerTaskEntry.prev</span><br><span class="line">        timerTaskEntry.prev.next = timerTaskEntry.next</span><br><span class="line">        timerTaskEntry.next = <span class="literal">null</span></span><br><span class="line">        timerTaskEntry.prev = <span class="literal">null</span></span><br><span class="line">        timerTaskEntry.list = <span class="literal">null</span></span><br><span class="line">        taskCounter.decrementAndGet()</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见 <code>TimerTaskList</code> 是双向链表，移除节点时会锁住该节点，然后修改其 <code>prev</code> 和 <code>next</code>，并维护了原子变量的 <code>taskCounter</code> 记录任务节点的数量。除了 <code>remove</code> 外只有 <code>add</code> 方法会在多线程下造成 race condition，因此要加锁。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(timerTaskEntry: <span class="type">TimerTaskEntry</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="keyword">var</span> done = <span class="literal">false</span></span><br><span class="line">  <span class="keyword">while</span> (!done) &#123;</span><br><span class="line">    <span class="comment">// 如果节点存在于另一个链表中, 将其删除从而保证一个节点只被一个链表拥有</span></span><br><span class="line">    <span class="comment">// 这里不加锁是因为 remove 也会调用 synchronized, 会造成死锁, remove 本身</span></span><br><span class="line">    <span class="comment">// 会反复重试直到节点的链表为 null</span></span><br><span class="line">    timerTaskEntry.remove()</span><br><span class="line"></span><br><span class="line">    synchronized &#123; <span class="comment">// 保护多线程 add</span></span><br><span class="line">      timerTaskEntry.synchronized &#123; <span class="comment">// 保护单个节点的 add 和 remove</span></span><br><span class="line">        <span class="keyword">if</span> (timerTaskEntry.list == <span class="literal">null</span>) &#123; <span class="comment">// 确认当前节点已经成功被 remove</span></span><br><span class="line">          <span class="keyword">val</span> tail = root.prev</span><br><span class="line">          timerTaskEntry.next = root</span><br><span class="line">          timerTaskEntry.prev = tail</span><br><span class="line">          timerTaskEntry.list = <span class="keyword">this</span></span><br><span class="line">          tail.next = timerTaskEntry</span><br><span class="line">          root.prev = timerTaskEntry</span><br><span class="line">          taskCounter.incrementAndGet()</span><br><span class="line">          done = <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>PS：这里似乎锁住单个节点没必要，因为 <code>add</code> 和 <code>remove</code> 本身都已经上锁了，大概是防止将来有其它方法直接修改节点的字段吧，毕竟节点的字段（这里主要指<code>list</code>）都不是私有的。（虽然我看到的对 <code>list</code> 的修改也就只在 <code>add</code>&#x2F;<code>remove</code> 方法中）。</p>
+<p>总之，这里单独实现的 <code>TimerTaskList</code>，除了实现了线程安全的增删操作外，主要是保证了链表上的节点（对应一个定时任务）是对应唯一的链表的，主要是为了保证节点在从链表 A 迁移到链表 B 时，不会继续留存在 A 中。</p>
+<p><code>TimerTask</code> 会绑定一个 <code>TimerTaskEntry</code> 类型的节点，该节点位于 <code>TimerTaskList</code> 类型的双向链表上，链表包含一个字段：<code>expirationMs</code>，即任务的毫秒级 timeout。任务链表在源码注释中也被称为 <strong>bucket（桶）</strong>，其本身也有一个原子类型的 <code>expiration</code> 字段代表任务链表本身的 timeout，提供了 setter 和 getter，需要注意的是 setter 返回的是 <code>Boolean</code> 而非 <code>Unit</code>，为 true 时则代表 <code>expiration</code> 发生了变化。</p>
+<p><code>TimerTask</code>  在绑定新的 <code>TimerTaskEntry</code> 时，如果和之前的节点不一样，也会将其移除：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[timer] <span class="function"><span class="keyword">def</span> <span class="title">setTimerTaskEntry</span></span>(entry: <span class="type">TimerTaskEntry</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  synchronized &#123;</span><br><span class="line">    <span class="comment">// if this timerTask is already held by an existing timer task entry,</span></span><br><span class="line">    <span class="comment">// we will remove such an entry first.</span></span><br><span class="line">    <span class="keyword">if</span> (timerTaskEntry != <span class="literal">null</span> &amp;&amp; timerTaskEntry != entry)</span><br><span class="line">      timerTaskEntry.remove()</span><br><span class="line"></span><br><span class="line">    timerTaskEntry = entry</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而在创建定时任务节点时，会自动和构造参数的 <code>TimerTask</code> 对象绑定：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span>[timer] <span class="class"><span class="keyword">class</span> <span class="title">TimerTaskEntry</span>(<span class="params">val timerTask: <span class="type">TimerTask</span>, val expirationMs: <span class="type">Long</span></span>) <span class="keyword">extends</span> <span class="title">Ordered</span>[<span class="type">TimerTaskEntry</span>] </span>&#123;</span><br><span class="line">    </span><br><span class="line">  <span class="comment">// if this timerTask is already held by an existing timer task entry,</span></span><br><span class="line">  <span class="comment">// setTimerTaskEntry will remove it.</span></span><br><span class="line">  <span class="keyword">if</span> (timerTask != <span class="literal">null</span>) timerTask.setTimerTaskEntry(<span class="keyword">this</span>)</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>延时操作（<code>DelayedOperation</code>）是一个抽象基类，继承自定时任务（<code>TimerTask</code>），由派生类实现以下方法：</p>
+<ul>
+<li>任务完成的回调；</li>
+<li>任务超时的回调；</li>
+<li>非阻塞地确认任务是否完成。</li>
+</ul>
+<p>每个延时操作都是一个定时任务（<code>TimerTask</code>），对应一个定时任务节点（<code>TimerTaskEntry</code>），而每个任务节点都是存在一个 bucket（定时任务链表，<code>TimerTaskList</code>）上的。通过线程安全的 <code>remove</code> 和 <code>add</code> 操作可以让节点从一个 bucket 移动到另一个 bucket，整个过程中节点都始终对应唯一的 bucket，不可能被多个 bucket 共享。这使得任务能安全地在多个 bucket 之间迁移。也就是接下来要阅读的时间轮 <code>TimeWheel</code>。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/01/13/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB09-Fetch%E8%AF%B7%E6%B1%82/" rel="prev" title="Kafka源码阅读09: Fetch请求">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读09: Fetch请求
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/02/04/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB11-%E6%97%B6%E9%97%B4%E8%BD%AETimingWheel/" rel="next" title="Kafka源码阅读11: 时间轮TimingWheel">
+      Kafka源码阅读11: 时间轮TimingWheel <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DelayOperation"><span class="nav-number">2.</span> <span class="nav-text">DelayOperation</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BB%E8%A6%81%E6%96%B9%E6%B3%95"><span class="nav-number">2.1.</span> <span class="nav-text">主要方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#maybeTryComplete"><span class="nav-number">2.2.</span> <span class="nav-text">maybeTryComplete</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#TimerTask"><span class="nav-number">3.</span> <span class="nav-text">TimerTask</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

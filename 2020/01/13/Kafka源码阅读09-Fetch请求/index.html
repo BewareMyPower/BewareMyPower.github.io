@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="Fetch协议Fetch API用于为某些分区获取日志，逻辑上它指定主题，分区和起始offset来取得消息，消息格式参考The Messages Fetch KafkaApis.handleFetchRequest1234567891011121314151617181920212223242526272829303132333435363738394041424344val versionId">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读09: Fetch请求">
+<meta property="og:url" content="http://yoursite.com/2020/01/13/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB09-Fetch%E8%AF%B7%E6%B1%82/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="Fetch协议Fetch API用于为某些分区获取日志，逻辑上它指定主题，分区和起始offset来取得消息，消息格式参考The Messages Fetch KafkaApis.handleFetchRequest1234567891011121314151617181920212223242526272829303132333435363738394041424344val versionId">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-01-13T04:55:45.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.222Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/01/13/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB09-Fetch%E8%AF%B7%E6%B1%82/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读09: Fetch请求 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/01/13/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB09-Fetch%E8%AF%B7%E6%B1%82/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读09: Fetch请求
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-01-13 12:55:45" itemprop="dateCreated datePublished" datetime="2020-01-13T12:55:45+08:00">2020-01-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="Fetch协议"><a href="#Fetch协议" class="headerlink" title="Fetch协议"></a>Fetch协议</h2><p>Fetch API用于为某些分区获取日志，逻辑上它指定<strong>主题</strong>，<strong>分区</strong>和<strong>起始offset</strong>来取得消息，消息格式参考<a target="_blank" rel="noopener" href="https://kafka.apache.org/protocol.html#The_Messages_Fetch">The Messages Fetch</a></p>
+<h2 id="KafkaApis-handleFetchRequest"><a href="#KafkaApis-handleFetchRequest" class="headerlink" title="KafkaApis.handleFetchRequest"></a>KafkaApis.handleFetchRequest</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> versionId = request.header.apiVersion</span><br><span class="line"><span class="keyword">val</span> clientId = request.header.clientId</span><br><span class="line"><span class="keyword">val</span> fetchRequest = request.body[<span class="type">FetchRequest</span>]</span><br><span class="line"><span class="keyword">val</span> fetchContext = fetchManager.newContext(fetchRequest.metadata(),</span><br><span class="line">  fetchRequest.fetchData(),</span><br><span class="line">  fetchRequest.toForget(),</span><br><span class="line">  fetchRequest.isFromFollower()) <span class="comment">// replicaId &gt;= 0, 即非负id代表fetch请求来自follower</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> erroneous = mutable.<span class="type">ArrayBuffer</span>[(<span class="type">TopicPartition</span>, <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>)]() <span class="comment">// 分区 -&gt; 响应</span></span><br><span class="line"><span class="keyword">val</span> interesting = mutable.<span class="type">ArrayBuffer</span>[(<span class="type">TopicPartition</span>, <span class="type">FetchRequest</span>.<span class="type">PartitionData</span>)]() <span class="comment">// 分区 -&gt; 请求</span></span><br><span class="line"><span class="keyword">if</span> (fetchRequest.isFromFollower()) &#123; <span class="comment">// fetch 请求来自于 follower</span></span><br><span class="line">  <span class="keyword">if</span> (authorize(request.session, <span class="type">ClusterAction</span>, <span class="type">Resource</span>.<span class="type">ClusterResource</span>)) &#123;</span><br><span class="line">    <span class="comment">// 认证成功，判断请求的每个分区是否存在，若存在则将分区对应的请求加入 interesting 中</span></span><br><span class="line">    <span class="comment">// 否则则构造错误响应加入 erroneous</span></span><br><span class="line">    fetchContext.foreachPartition((part, data) =&gt; &#123;</span><br><span class="line">      <span class="keyword">if</span> (!metadataCache.contains(part.topic)) &#123;</span><br><span class="line">        erroneous += part -&gt; <span class="keyword">new</span> <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>(<span class="type">Errors</span>.<span class="type">UNKNOWN_TOPIC_OR_PARTITION</span>,</span><br><span class="line">          <span class="type">FetchResponse</span>.<span class="type">INVALID_HIGHWATERMARK</span>, <span class="type">FetchResponse</span>.<span class="type">INVALID_LAST_STABLE_OFFSET</span>,</span><br><span class="line">          <span class="type">FetchResponse</span>.<span class="type">INVALID_LOG_START_OFFSET</span>, <span class="literal">null</span>, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        interesting += (part -&gt; data)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;)</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123; <span class="comment">// 认证失败，对所有分区都构造错误响应加入 erroneous</span></span><br><span class="line">    fetchContext.foreachPartition((part, data) =&gt; &#123;</span><br><span class="line">      erroneous += part -&gt; <span class="keyword">new</span> <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>(<span class="type">Errors</span>.<span class="type">TOPIC_AUTHORIZATION_FAILED</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_HIGHWATERMARK</span>, <span class="type">FetchResponse</span>.<span class="type">INVALID_LAST_STABLE_OFFSET</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_LOG_START_OFFSET</span>, <span class="literal">null</span>, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">    &#125;)</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123; <span class="comment">// fetch 请求来自于客户端（消费者），和之前处理一样，认证失败或者分区不存在则构造错误响应</span></span><br><span class="line">  fetchContext.foreachPartition((part, data) =&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> (!authorize(request.session, <span class="type">Read</span>, <span class="keyword">new</span> <span class="type">Resource</span>(<span class="type">Topic</span>, part.topic)))</span><br><span class="line">      erroneous += part -&gt; <span class="keyword">new</span> <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>(<span class="type">Errors</span>.<span class="type">TOPIC_AUTHORIZATION_FAILED</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_HIGHWATERMARK</span>, <span class="type">FetchResponse</span>.<span class="type">INVALID_LAST_STABLE_OFFSET</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_LOG_START_OFFSET</span>, <span class="literal">null</span>, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (!metadataCache.contains(part.topic))</span><br><span class="line">      erroneous += part -&gt; <span class="keyword">new</span> <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>(<span class="type">Errors</span>.<span class="type">UNKNOWN_TOPIC_OR_PARTITION</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_HIGHWATERMARK</span>, <span class="type">FetchResponse</span>.<span class="type">INVALID_LAST_STABLE_OFFSET</span>,</span><br><span class="line">        <span class="type">FetchResponse</span>.<span class="type">INVALID_LOG_START_OFFSET</span>, <span class="literal">null</span>, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      interesting += (part -&gt; data)</span><br><span class="line">  &#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见主要是调用<code>authorize</code>方法进行 ACL 认证，以及查询<code>metadataCache</code>判断请求的分区是否存在。对于 follower，认证是基于整个请求的，操作是<code>ClusterAction</code>；对于 consumer，认证是基于每个分区的，类型是<code>Read</code>。</p>
+<p>只有经过认证且存在于<code>metadataCache</code>的分区对应的请求会加入<code>interesting</code>中，其它分区会构造一个默认的不合法响应加入<code>erroneous</code>中。</p>
+<p>接下来定义了如下回调函数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">convertedPartitionData</span></span>(tp: <span class="type">TopicPartition</span>, data: <span class="type">FetchResponse</span>.<span class="type">PartitionData</span>): <span class="type">FetchResponse</span>.<span class="type">PartitionData</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">processResponseCallback</span></span>(responsePartitionData: <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">FetchPartitionData</span>)])</span><br></pre></td></tr></table></figure>
+
+<p>然后调用<code>ReplicaManager.fetchMessages</code>方法对 <code>interesting</code> 请求进行处理：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (interesting.isEmpty)</span><br><span class="line">  processResponseCallback(<span class="type">Seq</span>.empty)</span><br><span class="line"><span class="keyword">else</span> &#123;</span><br><span class="line">  replicaManager.fetchMessages(</span><br><span class="line">    fetchRequest.maxWait.toLong, <span class="comment">// 最大等待时间，毫秒</span></span><br><span class="line">    fetchRequest.replicaId, <span class="comment">// 副本 id，客户端为 Consumer 则为 -1</span></span><br><span class="line">    fetchRequest.minBytes, <span class="comment">// 响应中积攒的最小字节数</span></span><br><span class="line">    fetchRequest.maxBytes, <span class="comment">// 响应中积攒的最大字节数</span></span><br><span class="line">    versionId &lt;= <span class="number">2</span>, <span class="comment">// maxBytes 字段是从 V3 才引入的，因此判断 API 版本以兼容旧版本请求</span></span><br><span class="line">    interesting, <span class="comment">// 通过认证且分区存在的请求</span></span><br><span class="line">    replicationQuota(fetchRequest),</span><br><span class="line">    processResponseCallback, <span class="comment">// 处理响应的回调</span></span><br><span class="line">    fetchRequest.isolationLevel)</span><br></pre></td></tr></table></figure>
+
+<h2 id="ReplicaManager-fetchMessages"><a href="#ReplicaManager-fetchMessages" class="headerlink" title="ReplicaManager.fetchMessages"></a>ReplicaManager.fetchMessages</h2><h3 id="主要实现"><a href="#主要实现" class="headerlink" title="主要实现"></a>主要实现</h3><p>方法说明：从 leader 副本取得消息，等待足够数据可以获取。一旦超时或者请求条件被满足则回调被调用。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">fetchMessages</span></span>(timeout: <span class="type">Long</span>,</span><br><span class="line">                  replicaId: <span class="type">Int</span>,</span><br><span class="line">                  fetchMinBytes: <span class="type">Int</span>,</span><br><span class="line">                  fetchMaxBytes: <span class="type">Int</span>,</span><br><span class="line">                  hardMaxBytesLimit: <span class="type">Boolean</span>,</span><br><span class="line">                  fetchInfos: <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">PartitionData</span>)],</span><br><span class="line">                  quota: <span class="type">ReplicaQuota</span> = <span class="type">UnboundedQuota</span>,</span><br><span class="line">                  responseCallback: <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">FetchPartitionData</span>)] =&gt; <span class="type">Unit</span>,</span><br><span class="line">                  isolationLevel: <span class="type">IsolationLevel</span>) &#123;</span><br><span class="line">  <span class="keyword">val</span> isFromFollower = <span class="type">Request</span>.isValidBrokerId(replicaId) <span class="comment">// replicaId &gt;= 0 (Follower) 则为 true</span></span><br><span class="line">  <span class="comment">// replica id 不为 -2 (debugging) 和 -3 (future local) 则为 true, 即正常 Fetch 请求都只从 leader 获取</span></span><br><span class="line">  <span class="keyword">val</span> fetchOnlyFromLeader = replicaId != <span class="type">Request</span>.<span class="type">DebuggingConsumerId</span> &amp;&amp; replicaId != <span class="type">Request</span>.<span class="type">FutureLocalReplicaId</span></span><br><span class="line">  <span class="comment">// replica id 为 -1 (Consumer) 且不为 -3 (future local) 则为 true, 即 Consumer 仅获取已提交的 offsets</span></span><br><span class="line">  <span class="keyword">val</span> fetchOnlyCommitted = !isFromFollower &amp;&amp; replicaId != <span class="type">Request</span>.<span class="type">FutureLocalReplicaId</span></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">readFromLog</span></span>(): <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">LogReadResult</span>)] = &#123; <span class="comment">/* ... */</span> &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 从本地消息日志读取结果</span></span><br><span class="line">  <span class="keyword">val</span> logReadResults = readFromLog() <span class="comment">// Seq[(TopicPartition, LogReadResult)]</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 所有分区的 LogReadResult 组成的 Seq</span></span><br><span class="line">  <span class="keyword">val</span> logReadResultValues = logReadResults.map &#123; <span class="keyword">case</span> (_, v) =&gt; v &#125;</span><br><span class="line">  <span class="comment">// 总共读取的字节数</span></span><br><span class="line">  <span class="keyword">val</span> bytesReadable = logReadResultValues.map(_.info.records.sizeInBytes).sum</span><br><span class="line">  <span class="comment">// 如果存在 LogReadResult 的 error 字段不为 NONE 则为 true, 即存在读取错误</span></span><br><span class="line">  <span class="keyword">val</span> errorReadingData = logReadResultValues.foldLeft(<span class="literal">false</span>) ((errorIncurred, readResult) =&gt;</span><br><span class="line">    errorIncurred || (readResult.error != <span class="type">Errors</span>.<span class="type">NONE</span>))</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (timeout &lt;= <span class="number">0</span> || fetchInfos.isEmpty || bytesReadable &gt;= fetchMinBytes || errorReadingData) &#123;</span><br><span class="line">    <span class="comment">// 请求不想等待 or 请求消息为空 or 读取的总字节数超过了最小积攒字节数 or 存在读取错误</span></span><br><span class="line">    <span class="comment">// 此时直接生成结果给回调函数处理</span></span><br><span class="line">    <span class="keyword">val</span> fetchPartitionData = logReadResults.map &#123; <span class="keyword">case</span> (tp, result) =&gt;</span><br><span class="line">      tp -&gt; <span class="type">FetchPartitionData</span>(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,</span><br><span class="line">        result.lastStableOffset, result.info.abortedTransactions)</span><br><span class="line">    &#125;</span><br><span class="line">    responseCallback(fetchPartitionData)</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// Map 类型, key 为 TopicPartition, value 为 FetchPartitionStatus</span></span><br><span class="line">    <span class="keyword">val</span> fetchPartitionStatus = logReadResults.map &#123; <span class="keyword">case</span> (topicPartition, result) =&gt;</span><br><span class="line">      <span class="comment">// 对每个 LogReadResult, 从 fetchInfos 中找到第一个分区相同的 PartitionData, 若找不到分区, 则抛出 RuntimeException</span></span><br><span class="line">      <span class="comment">// PartitionData 包含以下字段：</span></span><br><span class="line">      <span class="comment">//   fetchOffset: Long     要获取的消息 offset</span></span><br><span class="line">      <span class="comment">//   logStartOffset: Long  follower 第一个可用 offset, V5 新增字段</span></span><br><span class="line">      <span class="comment">//   maxBytes: Long        响应中累积的最大字节数, V3 新增字段</span></span><br><span class="line">      <span class="keyword">val</span> fetchInfo = fetchInfos.collectFirst &#123;</span><br><span class="line">        <span class="keyword">case</span> (tp, v) <span class="keyword">if</span> tp == topicPartition =&gt; v</span><br><span class="line">      &#125;.getOrElse(sys.error(<span class="string">s&quot;Partition <span class="subst">$topicPartition</span> not found in fetchInfos&quot;</span>))</span><br><span class="line">      <span class="comment">// fetchOffsetMetadata: LogOffsetMetadata 来自从本地日志读取的信息</span></span><br><span class="line">      <span class="comment">// fetchInfo: PartitionData 来自客户端的请求字段, 利用 FetchContext 得到的</span></span><br><span class="line">      (topicPartition, <span class="type">FetchPartitionStatus</span>(result.info.fetchOffsetMetadata, fetchInfo))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 转发输入参数构造 DelayedFetch 对象</span></span><br><span class="line">    <span class="keyword">val</span> fetchMetadata = <span class="type">FetchMetadata</span>(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,</span><br><span class="line">      fetchOnlyCommitted, isFromFollower, replicaId, fetchPartitionStatus)</span><br><span class="line">    <span class="keyword">val</span> delayedFetch = <span class="keyword">new</span> <span class="type">DelayedFetch</span>(timeout, fetchMetadata, <span class="keyword">this</span>, quota, isolationLevel, responseCallback)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 构造 (topic, partition) 键值对作为延迟 fetch 操作的 key</span></span><br><span class="line">    <span class="keyword">val</span> delayedFetchKeys = fetchPartitionStatus.map &#123; <span class="keyword">case</span> (tp, _) =&gt; <span class="keyword">new</span> <span class="type">TopicPartitionOperationKey</span>(tp) &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 尝试立刻完成请求, 否则将其放入 purgatory, 因为每次创建延迟 fetch 操作时, 新的请求可能到达并使其可完成</span></span><br><span class="line">    delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>从本地日志文件中读取得到请求的每个分区的结果（<code>LogReadResult</code>）；</li>
+<li>若出现以下错误，则立刻将读取结果构造成 <code>FetchPartitionData</code> 交给回调函数处理；<ul>
+<li>timeout（对应请求的 <code>max_wait_time</code>字段）小于0，即客户端不想等待；</li>
+<li>读取结果为空，即客户端请求的任何分区都无法从本地读到结果；</li>
+<li>读取字节数不小于 <code>fetchMinBytes</code>（对应请求的 <code>min_bytes</code> 字段）；</li>
+<li>在读取某个请求的分区的结果时存在错误。</li>
+</ul>
+</li>
+<li>否则，遍历每个分区的读取结果，和请求中同一分区的请求字段一起构造 <code>FetchPartitionStatus</code>；</li>
+<li>构造 <code>DelayedFetch</code> 对象，尝试完成请求，否则将其放入 <code>delayedFetchPurgatory</code> 中延迟处理。</li>
+</ol>
+<p>关键的部分就是 <code>readFromLog()</code> 函数和延迟处理的部分。延迟处理相关设施（purgatory，<code>DelayedOperation</code>）在之后去阅读，本篇最后阅读 <code>readFromLog()</code> 和发送响应的回调函数的实现。</p>
+<h3 id="responseCallback"><a href="#responseCallback" class="headerlink" title="responseCallback"></a>responseCallback</h3><p>即 <code>KafkaApis.handleFetchRequest</code> 方法中定义的回调函数 <code>processResponseCallback</code>，用来在处理请求完成，构造响应后将响应发送给客户端。</p>
+<p>这部分不细看了，因为有不少逻辑是为了实现事务以及配置限额的，这不是目前我阅读源码的重点。核心处理分为两步：</p>
+<ol>
+<li>通过 <code>convertedPartitionData</code> 将 <code>PartitionData</code> 转换成和兼容旧版本的响应结构；</li>
+<li>调用 <code>KafkaApis.sendResponse</code> 发送响应，在之前的  <a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/">Produce 请求(2): 发送响应</a>  中都看过这个方法，简单回顾下，实际上就是把响应加入 <code>Processor</code> 的响应队列，之后的发送由 <code>Processor</code> 处理，参考  <a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/">网络层阅读之 Acceptor 和 Processor</a> 的 4.2 节。</li>
+</ol>
+<h2 id="readFromLog"><a href="#readFromLog" class="headerlink" title="readFromLog"></a>readFromLog</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">readFromLog</span></span>(): <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">LogReadResult</span>)] = &#123;</span><br><span class="line">  <span class="keyword">val</span> result = readFromLocalLog(</span><br><span class="line">    replicaId = replicaId, <span class="comment">// 副本 id, 客户端为 Consumer 则为 -1</span></span><br><span class="line">    fetchOnlyFromLeader = fetchOnlyFromLeader,</span><br><span class="line">    readOnlyCommitted = fetchOnlyCommitted,</span><br><span class="line">    fetchMaxBytes = fetchMaxBytes, <span class="comment">// max_bytes 字段</span></span><br><span class="line">    hardMaxBytesLimit = hardMaxBytesLimit, <span class="comment">// 请求版本 &gt;= V3 则为 true, 此时请求有 max_bytes 字段</span></span><br><span class="line">    readPartitionInfo = fetchInfos, <span class="comment">// 通过认证且分区存在的分区信息</span></span><br><span class="line">    quota = quota,</span><br><span class="line">    isolationLevel = isolationLevel)</span><br><span class="line">  <span class="keyword">if</span> (isFromFollower) updateFollowerLogReadResults(replicaId, result)</span><br><span class="line">  <span class="keyword">else</span> result</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>调用 <code>readFromLocalLog</code>，如果 Fetch 请求来自 follower 则还需要调用 <code>updateFollowerLogReadResults</code> 更新 follower 的结果。</p>
+<h3 id="readFromLocalLog"><a href="#readFromLocalLog" class="headerlink" title="readFromLocalLog"></a>readFromLocalLog</h3><p>首先看看内部定义的 <code>read</code> 函数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">read</span></span>(tp: <span class="type">TopicPartition</span>, fetchInfo: <span class="type">PartitionData</span>, limitBytes: <span class="type">Int</span>, minOneMessage: <span class="type">Boolean</span>): <span class="type">LogReadResult</span> = &#123;</span><br><span class="line">  <span class="keyword">val</span> offset = fetchInfo.fetchOffset</span><br><span class="line">  <span class="keyword">val</span> partitionFetchSize = fetchInfo.maxBytes</span><br><span class="line">  <span class="keyword">val</span> followerLogStartOffset = fetchInfo.logStartOffset</span><br><span class="line"></span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="comment">// 决定是否仅从 leader 获取, 然而无论是 Consumer 还是 Follower 都会从 leader 获取</span></span><br><span class="line">    <span class="keyword">val</span> localReplica = <span class="keyword">if</span> (fetchOnlyFromLeader)</span><br><span class="line">      getLeaderReplicaIfLocal(tp) <span class="comment">// 分区的 leader 副本</span></span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      getReplicaOrException(tp)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">val</span> initialHighWatermark = localReplica.highWatermark.messageOffset</span><br><span class="line">    <span class="keyword">val</span> lastStableOffset = <span class="keyword">if</span> (isolationLevel == <span class="type">IsolationLevel</span>.<span class="type">READ_COMMITTED</span>)</span><br><span class="line">      <span class="type">Some</span>(localReplica.lastStableOffset.messageOffset)</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      <span class="type">None</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// decide whether to only fetch committed data (i.e. messages below high watermark)</span></span><br><span class="line">    <span class="keyword">val</span> maxOffsetOpt = <span class="keyword">if</span> (readOnlyCommitted)</span><br><span class="line">      <span class="type">Some</span>(lastStableOffset.getOrElse(initialHighWatermark))</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">      <span class="type">None</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/* 在读取日志之前首先读取 LogOffsetMetadata, 它能判断指定副本是否同步</span></span><br><span class="line"><span class="comment">     * 在读取之后再使用 LEO 会导致 race condition, 比如在副本完成消费后, 数据立刻添加到了日志末尾,</span></span><br><span class="line"><span class="comment">     * 这可能导致副本一直被判断不同步</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">val</span> initialLogEndOffset = localReplica.logEndOffset.messageOffset <span class="comment">// 在读取操作之前取得 LEO</span></span><br><span class="line">    <span class="keyword">val</span> initialLogStartOffset = localReplica.logStartOffset</span><br><span class="line">    <span class="keyword">val</span> fetchTimeMs = time.milliseconds <span class="comment">// 当前时间戳</span></span><br><span class="line">    <span class="keyword">val</span> logReadInfo = localReplica.log <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">Some</span>(log) =&gt;</span><br><span class="line">        <span class="comment">// 取得 partition_max_bytes (分区本身的最大读取字节数) 和 max_bytes 的较小值作为 fetch 字节数上限</span></span><br><span class="line">        <span class="keyword">val</span> adjustedFetchSize = math.min(partitionFetchSize, limitBytes)</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 读取 offset 开始的最多 adjustedFetchSize 个字节, 若 minOneMessage 为 true, 则即使第一条消息大小</span></span><br><span class="line">        <span class="comment">// 超过了 adjustedFetchSize 也会返回这条消息, 返回类型: FetchDataInfo</span></span><br><span class="line">        <span class="keyword">val</span> fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt, minOneMessage, isolationLevel)</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 该分区正在被限速, 即限制访问该分区, 清空消息</span></span><br><span class="line">        <span class="keyword">if</span> (shouldLeaderThrottle(quota, tp, replicaId))</span><br><span class="line">          <span class="type">FetchDataInfo</span>(fetch.fetchOffsetMetadata, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">        <span class="comment">// V3 版本开始 hardMaxBytesLimit 为 false, 如果第一条消息大小超过了 max_bytes 限制也会读取</span></span><br><span class="line">        <span class="comment">// 为了防止客户端报错 RecordToolLargeException, 此时将过大的消息替换成空消息</span></span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (!hardMaxBytesLimit &amp;&amp; fetch.firstEntryIncomplete)</span><br><span class="line">          <span class="type">FetchDataInfo</span>(fetch.fetchOffsetMetadata, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">        <span class="keyword">else</span> fetch</span><br><span class="line"></span><br><span class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// leader 副本在该分区不存在本地日志</span></span><br><span class="line">        error(<span class="string">s&quot;Leader for partition <span class="subst">$tp</span> does not have a local log&quot;</span>)</span><br><span class="line">        <span class="type">FetchDataInfo</span>(<span class="type">LogOffsetMetadata</span>.<span class="type">UnknownOffsetMetadata</span>, <span class="type">MemoryRecords</span>.<span class="type">EMPTY</span>)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">LogReadResult</span>(info = logReadInfo, <span class="comment">// localReplica.log 调用 read 方法的返回值</span></span><br><span class="line">                  <span class="comment">// localReplica 在内存中维护的 HW, LogStartOffset, LEO</span></span><br><span class="line">                  highWatermark = initialHighWatermark,</span><br><span class="line">                  leaderLogStartOffset = initialLogStartOffset,</span><br><span class="line">                  leaderLogEndOffset = initialLogEndOffset,</span><br><span class="line">                  <span class="comment">// 请求中 follower 的 LogStartOffset, 客户端为 Consumer 则为 -1</span></span><br><span class="line">                  followerLogStartOffset = followerLogStartOffset,</span><br><span class="line">                  fetchTimeMs = fetchTimeMs, <span class="comment">// 从本地读取数据之前记录的时间戳</span></span><br><span class="line">                  readSize = partitionFetchSize, <span class="comment">// <span class="doctag">NOTE:</span> 这里是请求的 max_bytes 字段，而非实际读取字节数</span></span><br><span class="line">                  lastStableOffset = lastStableOffset, <span class="comment">// LSO, 用于事务实现</span></span><br><span class="line">                  exception = <span class="type">None</span>)</span><br><span class="line">  &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">    <span class="comment">// (...) 异常处理, 返回一个 exception 字段为捕获的异常, 其它字段都不合法的 LogReadResult</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>流程：首先取得本地副本（实际上对 Consumer 和 Follower 而言都是 Leader 副本），然后取得 HW，LEO 等字段，记录时间戳，然后通过本地副本读取本地数据。这里还利用了 V3 版本请求的 <code>max_bytes</code> 字段，限制读取的字节数上限，但如果第一条消息长度就超出上限的话，仍然会返回整条消息（此时读取字节数超过了 <code>max_bytes</code>）。</p>
+<p>注意 <code>LogReadResult</code> 的第一个字段是从本地日志读取的信息：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">FetchDataInfo</span>(<span class="params">fetchOffsetMetadata: <span class="type">LogOffsetMetadata</span>, // offset 元数据, 包括:</span></span></span><br><span class="line"><span class="params"><span class="class">                         // offset; <span class="type">Segment</span> 的基础 offset; 相对于 <span class="type">Segment</span> 的物理偏移字节数</span></span></span><br><span class="line"><span class="params"><span class="class">                         records: <span class="type">Records</span>, // 消息集</span></span></span><br><span class="line"><span class="params"><span class="class">                         firstEntryIncomplete: <span class="type">Boolean</span> = false,</span></span></span><br><span class="line"><span class="params"><span class="class">                         abortedTransactions: <span class="type">Option</span>[<span class="type">List</span>[<span class="type">AbortedTransaction</span>]] = <span class="type">None</span></span></span></span><br></pre></td></tr></table></figure>
+
+<p>主要是前两个字段，消息集就不说了，元数据的作用是记录了 offset 对应消息相对本地 Segment 的实际偏移量。这里回顾一个基本概念，Kafka 的每个分区都用本地文件记录消息，为了防止单个文件过大，会根据文件大小和写入时间分成多个文件，单个文件被称为 <strong>Segment</strong>（对应代码中的 <code>LogSegment</code> 类），而 <code>Log</code> 类则是管理这些 Segment。因此，记录消息的物理偏移量，便于在从本地 Segment 中快速通过 offset 定位到对应消息。</p>
+<p>接着看 <code>readFromLocalLog</code> 的逻辑：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> limitBytes = fetchMaxBytes <span class="comment">// 初始值为 max_bytes 字段, 整个响应(多条消息)中可积累的最大字节数</span></span><br><span class="line"><span class="keyword">val</span> result = <span class="keyword">new</span> mutable.<span class="type">ArrayBuffer</span>[(<span class="type">TopicPartition</span>, <span class="type">LogReadResult</span>)]</span><br><span class="line"><span class="keyword">var</span> minOneMessage = !hardMaxBytesLimit</span><br><span class="line">readPartitionInfo.foreach &#123; <span class="keyword">case</span> (tp, fetchInfo) =&gt;</span><br><span class="line">  <span class="keyword">val</span> readResult = read(tp, fetchInfo, limitBytes, minOneMessage) <span class="comment">// 指定分区的读取结果</span></span><br><span class="line">  <span class="keyword">val</span> recordBatchSize = readResult.info.records.sizeInBytes <span class="comment">// 实际读取字节数</span></span><br><span class="line">  <span class="comment">// 读取了至少一条消息, 那么以后严格遵守 max_bytes 的限制</span></span><br><span class="line">  <span class="keyword">if</span> (recordBatchSize &gt; <span class="number">0</span>)</span><br><span class="line">    minOneMessage = <span class="literal">false</span></span><br><span class="line">  limitBytes = math.max(<span class="number">0</span>, limitBytes - recordBatchSize)</span><br><span class="line">  result += (tp -&gt; readResult)</span><br><span class="line">&#125;</span><br><span class="line">result</span><br></pre></td></tr></table></figure>
+
+<p>可见，每个分区都对应一条读取结果（<code>LogReadResult</code>），包含 offset 对应消息，还有 HW&#x2F;LEO 等信息 。V3 开始外部的 <code>max_bytes</code> 字段限制所有消息的最大字节数，而每个分区都有自己的 <code>partition_max_bytes</code> 限制单条消息的最大字节数。</p>
+<p>读完这部分代码后，可以回顾 Fetch 请求的协议（V3 版本），并附上注释说明：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Fetch Request (Version: 3) =&gt; replica_id max_wait_time min_bytes max_bytes [topics] </span><br><span class="line">  replica_id =&gt; INT32 // -1: Consumer, &gt;= 0: Follower</span><br><span class="line">  max_wait_time =&gt; INT32 // 延迟请求中的 timeout，用于构造 DelayedFetch 对象</span><br><span class="line">  min_bytes =&gt; INT32 // 响应字节数超过则立刻发送响应，见ReplicaManager.fetchMessages</span><br><span class="line">  max_bytes =&gt; INT32 // 整个响应的最大字节数</span><br><span class="line">  topics =&gt; topic [partitions] </span><br><span class="line">    topic =&gt; STRING</span><br><span class="line">    partitions =&gt; partition fetch_offset partition_max_bytes </span><br><span class="line">      partition =&gt; INT32</span><br><span class="line">      fetch_offset =&gt; INT64</span><br><span class="line">      partition_max_bytes =&gt; INT32 // 每个分区消息的最大字节数</span><br></pre></td></tr></table></figure>
+
+<p>其中 fetch_offset 可由 <code>FetchContext</code> 的相关方法取得：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">FetchContext</span> <span class="keyword">extends</span> <span class="title">Logging</span> </span>&#123;</span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">    * Get the fetch offset for a given partition.</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">getFetchOffset</span></span>(part: <span class="type">TopicPartition</span>): <span class="type">Option</span>[<span class="type">Long</span>]</span><br></pre></td></tr></table></figure>
+
+<h3 id="updateFollowerLogReadResults"><a href="#updateFollowerLogReadResults" class="headerlink" title="updateFollowerLogReadResults"></a>updateFollowerLogReadResults</h3><p>当 replica id 大于 0 时，代表客户端为 Follower，在从本地日志读取信息后，会调用该方法更新 Follower 的 fetch 状态，并更新读取结果。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">updateFollowerLogReadResults</span></span>(replicaId: <span class="type">Int</span>,</span><br><span class="line">                                         readResults: <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">LogReadResult</span>)]): <span class="type">Seq</span>[(<span class="type">TopicPartition</span>, <span class="type">LogReadResult</span>)] = &#123;</span><br><span class="line">  readResults.map &#123; <span class="keyword">case</span> (topicPartition, readResult) =&gt;</span><br><span class="line">    <span class="keyword">var</span> updatedReadResult = readResult</span><br><span class="line">    nonOfflinePartition(topicPartition) <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">Some</span>(partition) =&gt;</span><br><span class="line">        partition.getReplica(replicaId) <span class="keyword">match</span> &#123;</span><br><span class="line">          <span class="keyword">case</span> <span class="type">Some</span>(replica) =&gt;</span><br><span class="line">          <span class="keyword">case</span> <span class="type">Some</span>(replica) =&gt;</span><br><span class="line">            <span class="comment">// 首先更新分区上的 follower 的状态, 若 LW 或 HW 增加则返回 true</span></span><br><span class="line">            <span class="keyword">if</span> (partition.updateReplicaLogReadResult(replica, readResult))</span><br><span class="line">              <span class="comment">// 将 leader 副本的信息 (HW, LogStartOffset, LEO) 更新到读取结果上</span></span><br><span class="line">              partition.leaderReplicaIfLocal.foreach &#123; leaderReplica =&gt;</span><br><span class="line">                updatedReadResult = readResult.updateLeaderReplicaInfo(leaderReplica)</span><br><span class="line">              &#125;</span><br><span class="line">          <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// 当前副本不是分区的副本, 清空读取结果的 records 字段并将 metadata 标记为未知</span></span><br><span class="line">            <span class="comment">// 略去日志...</span></span><br><span class="line">            updatedReadResult = readResult.withEmptyFetchInfo</span><br><span class="line">        &#125;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// 分区不可用（即 offline 分区）, 打印警告日志, 不修改读取结果</span></span><br><span class="line">        warn(<span class="string">s&quot;While recording the replica LEO, the partition <span class="subst">$topicPartition</span> hasn&#x27;t been created.&quot;</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    topicPartition -&gt; updatedReadResult</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后对读取结果调用 <code>updateLeaderReplicaInfo</code> 更新为 leader 副本的信息：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">updateLeaderReplicaInfo</span></span>(leaderReplica: <span class="type">Replica</span>): <span class="type">LogReadResult</span> =</span><br><span class="line">  copy(highWatermark = leaderReplica.highWatermark.messageOffset,</span><br><span class="line">    leaderLogStartOffset = leaderReplica.logStartOffset,</span><br><span class="line">    leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset)</span><br></pre></td></tr></table></figure>
+
+<p>利用 Scala case 类的 <code>copy</code> 方法，返回更新对应字段后的对象。这里将读取结果的 HW，LogStartOffset，LEO 更新为 leader 副本维护的相应信息。因为 follower 副本发送 Fetch 请求时，leader 副本可能更新 HW（如果之前 follower 没有同步到最新），因此需要把更新后的 HW 发送给 follower。</p>
+<p>顺带提下这里涉及到的另一个概念：低水位（LW, Low Watermark）。LW 即所有副本中最小的 LogStartOffset，一般情况下 LW 都是 0，但是如果服务端收到了 <code>DeleteRecords</code> 请求，删除日志文件的部分记录（消息）时，会更新 LW。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本篇阅读了 Fetch 请求的处理流程，主要根据 replica id 字段分 Consumer 和 Follower 来处理：</p>
+<ol>
+<li>会话认证，判断请求分区是否存在，将没有问题的分区对应的请求构成 Map 由 <code>ReplicaManager</code> 处理；</li>
+<li><code>ReplicaManager</code> 对每个分区，找到其 leader 副本；</li>
+<li>leader 副本从本地读取请求的 offset 开始的若干消息（由全局的以及各分区的 <code>max_bytes</code> 字段来限制读取最大字节数），和维护的其它信息构成读取结果；</li>
+<li>对 follower 副本的请求，还会将 leader 副本的 HW，LEO，LogStartOffset 更新到读取结果中；</li>
+<li>根据读取结果和请求的相关字段判断是否立刻发送响应，比如读取没问题时，读取字节数超过了 <code>min_bytes</code> 即可发送；</li>
+<li>否则，构造 <code>DelayedFetch</code> 对象传入 <code>DelayedFetchPurgatory</code> 对象中，此时 purgatory 还会判断一次处理是否完成，若已完成则不用延迟处理。</li>
+</ol>
+<p>主要区别还是第 4 步，因为 follower 的 Fetch 请求是用来与 leader 同步的，因此需要将 HW 记录在结果中让 follower 更新自己的 HW。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/01/07/Scala-%E7%AC%94%E8%AE%B0-%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E9%A3%8E%E6%A0%BC%E5%88%9D%E6%8E%A2/" rel="prev" title="Scala 笔记 - 函数式编程风格初探">
+      <i class="fa fa-chevron-left"></i> Scala 笔记 - 函数式编程风格初探
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/01/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB10-%E5%BB%B6%E8%BF%9F%E6%93%8D%E4%BD%9CDelayedOperation/" rel="next" title="Kafka源码阅读10: 延迟操作DelayedOperation">
+      Kafka源码阅读10: 延迟操作DelayedOperation <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Fetch%E5%8D%8F%E8%AE%AE"><span class="nav-number">1.</span> <span class="nav-text">Fetch协议</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#KafkaApis-handleFetchRequest"><span class="nav-number">2.</span> <span class="nav-text">KafkaApis.handleFetchRequest</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ReplicaManager-fetchMessages"><span class="nav-number">3.</span> <span class="nav-text">ReplicaManager.fetchMessages</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BB%E8%A6%81%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.1.</span> <span class="nav-text">主要实现</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#responseCallback"><span class="nav-number">3.2.</span> <span class="nav-text">responseCallback</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#readFromLog"><span class="nav-number">4.</span> <span class="nav-text">readFromLog</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#readFromLocalLog"><span class="nav-number">4.1.</span> <span class="nav-text">readFromLocalLog</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#updateFollowerLogReadResults"><span class="nav-number">4.2.</span> <span class="nav-text">updateFollowerLogReadResults</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

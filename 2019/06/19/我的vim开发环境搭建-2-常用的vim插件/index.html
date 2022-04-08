@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="1. NERDTree在前文中，我主要讲了一堆软件的升级，其主要原因是为了支持YouCompleteMe这个安装起来超级复杂的插件，其余的插件安装很简单，有了vim-plug后，只需要2步，以NERDTree（目录树）为例 第1步，在.vimrc中添加插件项目地址，然后在vim中执行:PlugInstall命令（也可以直接克隆到plug#begin指定的目录，这点前文已经讲过）： 12345678">
+<meta property="og:type" content="article">
+<meta property="og:title" content="我的vim开发环境搭建(2): 常用的vim插件">
+<meta property="og:url" content="http://yoursite.com/2019/06/19/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-2-%E5%B8%B8%E7%94%A8%E7%9A%84vim%E6%8F%92%E4%BB%B6/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="1. NERDTree在前文中，我主要讲了一堆软件的升级，其主要原因是为了支持YouCompleteMe这个安装起来超级复杂的插件，其余的插件安装很简单，有了vim-plug后，只需要2步，以NERDTree（目录树）为例 第1步，在.vimrc中添加插件项目地址，然后在vim中执行:PlugInstall命令（也可以直接克隆到plug#begin指定的目录，这点前文已经讲过）： 12345678">
+<meta property="og:locale">
+<meta property="og:image" content="http://yoursite.com/%E6%A0%91%E5%BD%A2%E7%9B%AE%E5%BD%95.jpg">
+<meta property="og:image" content="http://yoursite.com/ale%E6%A3%80%E6%9F%A5%E8%B5%84%E6%BA%90%E6%B3%84%E6%BC%8F.jpg">
+<meta property="og:image" content="http://yoursite.com/signify%E6%98%BE%E7%A4%BAgit%E9%A1%B9%E7%9B%AE%E4%BF%AE%E6%94%B9%E6%83%85%E5%86%B5.jpg">
+<meta property="article:published_time" content="2019-06-19T08:19:34.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.234Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="搭环境">
+<meta property="article:tag" content="vim">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/%E6%A0%91%E5%BD%A2%E7%9B%AE%E5%BD%95.jpg">
+
+<link rel="canonical" href="http://yoursite.com/2019/06/19/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-2-%E5%B8%B8%E7%94%A8%E7%9A%84vim%E6%8F%92%E4%BB%B6/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>我的vim开发环境搭建(2): 常用的vim插件 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/06/19/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-2-%E5%B8%B8%E7%94%A8%E7%9A%84vim%E6%8F%92%E4%BB%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          我的vim开发环境搭建(2): 常用的vim插件
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-06-19 16:19:34" itemprop="dateCreated datePublished" datetime="2019-06-19T16:19:34+08:00">2019-06-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="1-NERDTree"><a href="#1-NERDTree" class="headerlink" title="1. NERDTree"></a>1. NERDTree</h2><p>在<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/">前文</a>中，我主要讲了一堆软件的升级，其主要原因是为了支持YouCompleteMe这个安装起来超级复杂的插件，其余的插件安装很简单，有了vim-plug后，只需要2步，以NERDTree（目录树）为例</p>
+<p>第1步，在<code>.vimrc</code>中添加插件项目地址，然后在vim中执行<code>:PlugInstall</code>命令（也可以直接克隆到<code>plug#begin</code>指定的目录，这点前文已经讲过）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">call plug#begin(&#x27;~/.vim/plugged&#x27;)</span><br><span class="line"></span><br><span class="line">&quot; NERDTree插件的github网址（不包含前缀https://github.com/）</span><br><span class="line">Plug &#x27;scrooloose/nerdtree&#x27;</span><br><span class="line">&quot; 其他插件</span><br><span class="line">&quot; ...</span><br><span class="line"></span><br><span class="line">call plug#end()</span><br></pre></td></tr></table></figure>
+
+<p>第2步，添加插件相关的配置脚本，可以参考插件项目的README：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">nmap &lt;Leader&gt;&lt;Leader&gt; :NERDTreeToggle&lt;CR&gt;</span><br><span class="line">let NERDTreeWinSize=32          &quot; 设置NERDTree子窗口宽度</span><br><span class="line">let NERDTreeWinPos=&quot;right&quot;      &quot; 设置NERDTree子窗口位置</span><br><span class="line">let NERDTreeShowHidden=1        &quot; 显示隐藏文件</span><br><span class="line">let NERDTreeMinimalUI=1         &quot; NERDTree 子窗口中不显示冗余帮助信息</span><br></pre></td></tr></table></figure>
+
+<p>前文配置过<code>&lt;Leader&gt;</code>即分号（;）的代码，<code>nmap</code>这句就是配置快捷键，也就是连按2个;就等价于执行<code>:NERDTreeToggle</code>命令，打开树形目录，如下图所示：</p>
+<p><img src="/%E6%A0%91%E5%BD%A2%E7%9B%AE%E5%BD%95.jpg" alt="树形目录"></p>
+<p>后面的则是插件的配置，在注释中也给出了。使用方式可以参考项目的README，vim可以通过<code>Ctrl+W+上/下/左/右</code>在不同切分窗口中切换，当光标在树形目录中时可以用上下键移动：</p>
+<table>
+<thead>
+<tr>
+<th align="left">按键</th>
+<th align="left">功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">Enter</td>
+<td align="left">如果光标所在行是目录，展开当前目录，否则直接打开该文件</td>
+</tr>
+<tr>
+<td align="left">s</td>
+<td align="left">纵向切分窗口中打开光标所在行对应文件，等价于<code>:split &lt;filename&gt;</code></td>
+</tr>
+<tr>
+<td align="left">i</td>
+<td align="left">横向切分窗口中打开光标所在行对应文件，等价于<code>:vsplit &lt;filename&gt;</code></td>
+</tr>
+<tr>
+<td align="left">r</td>
+<td align="left">更新树形目录</td>
+</tr>
+<tr>
+<td align="left">u</td>
+<td align="left">将根目录退回到上一层</td>
+</tr>
+<tr>
+<td align="left">C</td>
+<td align="left">将根目录变回光标所在行对应目录</td>
+</tr>
+</tbody></table>
+<h2 id="2-YouCompleteMe"><a href="#2-YouCompleteMe" class="headerlink" title="2. YouCompleteMe"></a>2. YouCompleteMe</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;Valloric/YouCompleteMe&#x27;</span><br></pre></td></tr></table></figure>
+
+<p><a target="_blank" rel="noopener" href="https://github.com/Valloric/YouCompleteMe">YouCompleteMe</a>（简称YCM）可谓是vim环境下C&#x2F;C++补全的标配了，不同于其他插件，YCM非常重量级，200多M，而且它对vim版本要求比较高，还要求vim支持python，最后还需要用clang来编译，因此前文做的大量工作都是为这个插件准备的。对于较新的Linux系统，手动编译完高版本的vim后，直接调用<code>./install.sh --clang-completer</code>就行，它会自动下载新版本的clang，但是对CentOS 6.10行不通，因此之前我手动编译了高版本的clang。</p>
+<p>虽然我也找过替代品，但亲自尝试的结果是，现阶段补全C&#x2F;C++确实没有比YCM体验更好的。</p>
+<h3 id="2-1-YCM的安装"><a href="#2-1-YCM的安装" class="headerlink" title="2.1 YCM的安装"></a>2.1 YCM的安装</h3><p>之前说过YCM比较大，考虑到国内访问github速度之慢，使用vim-plug安装不如手动克隆，而且这个项目有不少子模块，因此需要<code>git submodule</code>，命令如下所示（注意要先进入<code>~/.vim/plugged</code>目录）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">git clone https://github.com/Valloric/YouCompleteMe.git</span><br><span class="line">git submodule update --init --recursive</span><br></pre></td></tr></table></figure>
+
+<p>可以借助代理来加速，不过我是直接下载完毕后将整个目录压缩打包保存起来，下次安装直接上传解压即可。</p>
+<p>YCM的安装是利用python脚本完成的，不过安装时可能会提示python缺少某些模块。那是因为之前编译python时没有安装依赖项，参考<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/">前文</a>的2.1节。安装依赖项后重新编译python即可。</p>
+<p>进入YouCompleteMe目录，使用本地的gcc、g++、cmake、clang来安装：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CC=&quot;$LOCAL/gcc-5.4.0/bin/gcc&quot; CXX=&quot;$LOCAL/gcc-5.4.0/bin/g++&quot; ./install.py \</span><br><span class="line">  --clang-completer --system-libclang</span><br></pre></td></tr></table></figure>
+
+<p>最终会在<code>third_party/ycmd</code>目录下生成<code>ycm_core.so</code>。</p>
+<h3 id="2-2-YCM的配置"><a href="#2-2-YCM的配置" class="headerlink" title="2.2 YCM的配置"></a>2.2 YCM的配置</h3><p>在<code>.vimrc</code>文件中添加如下内容：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">&quot;&quot; YCM配置</span><br><span class="line">&quot; 全局YCM配置文件路径</span><br><span class="line">let g:ycm_global_ycm_extra_conf = &#x27;~/.ycm_extra_conf.py&#x27;</span><br><span class="line">let g:ycm_confirm_extra_conf = 0  &quot; 不提示是否载入本地ycm_extra_conf文件</span><br><span class="line">let g:ycm_min_num_of_chars_for_completion = 2  &quot; 输入第2个字符就罗列匹配项</span><br><span class="line"></span><br><span class="line">&quot; Ctrl+J跳转至定义、声明或文件</span><br><span class="line">nnoremap &lt;c-j&gt; :YcmCompleter GoToDefinitionElseDeclaration&lt;CR&gt;|</span><br><span class="line"></span><br><span class="line">&quot; 语法关键字、注释、字符串补全</span><br><span class="line">let g:ycm_seed_identifiers_with_syntax = 1</span><br><span class="line">let g:ycm_complete_in_comments = 1</span><br><span class="line">let g:ycm_complete_in_strings = 1</span><br><span class="line">&quot; 从注释、字符串、tag文件中收集用于补全信息</span><br><span class="line">let g:ycm_collect_identifiers_from_comments_and_strings = 1</span><br><span class="line">let g:ycm_collect_identifiers_from_tags_files = 1</span><br><span class="line"></span><br><span class="line">&quot; 禁止快捷键触发补全</span><br><span class="line">let g:ycm_key_invoke_completion = &#x27;&lt;c-z&gt;&#x27;  &quot; 主动补全(默认&lt;c-space&gt;)</span><br><span class="line">noremap &lt;c-z&gt; &lt;NOP&gt;</span><br><span class="line"></span><br><span class="line">&quot; 输入2个字符就触发补全</span><br><span class="line">let g:ycm_semantic_triggers = &#123;</span><br><span class="line">            \ &#x27;c,cpp,python,java,go,erlang,perl&#x27;: [&#x27;re!\w&#123;2&#125;&#x27;],</span><br><span class="line">            \ &#x27;cs,lua,javascript&#x27;: [&#x27;re!\w&#123;2&#125;&#x27;],</span><br><span class="line">            \ &#125;</span><br><span class="line">                                    </span><br><span class="line">let g:ycm_show_diagnostics_ui = 0  &quot; 禁用YCM自带语法检查(使用ale)</span><br><span class="line"></span><br><span class="line">&quot; 防止YCM和Ultisnips的TAB键冲突，禁止YCM的TAB</span><br><span class="line">let g:ycm_key_list_select_completion = [&#x27;&lt;C-n&gt;&#x27;, &#x27;&lt;Down&gt;&#x27;]</span><br><span class="line">let g:ycm_key_list_previous_completion = [&#x27;&lt;C-p&gt;&#x27;, &#x27;&lt;Up&gt;&#x27;]</span><br></pre></td></tr></table></figure>
+
+<p>输入2个字符即可触发补全操作，对C++而言，输入<code>.</code>、<code>::</code>、<code>-&gt;</code>也会触发补全操作。</p>
+<p>除了补全，YCM本身也含有跳转功能，这里设置快捷键为Ctrl+J。但是目前似乎还不太完善，比如有时候只能跳转到声明无法跳转到定义。这些功能可能还需要借助ctags、cscope来辅助。</p>
+<p>YCM对C&#x2F;C++的补全、跳转是基于<code>.ycm_extra_conf.py</code>文件的，比如指定语言种类、标准、头文件目录、编译选项，其中编译选项是用来实现语法检查的，这里禁止了YCM自身的语法检查，使用后文将介绍的ALE插件来完成。其配置参考我的博客：<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/5aaae8f036c1">为YCM配置ycm_extra_conf脚本</a></p>
+<p>CentOS配置比较简单，C头文件都在<code>/usr/include</code>下，C++头文件则在自己安装的gcc目录下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#x27;-isystem&#x27;,</span><br><span class="line">&#x27;/usr/include&#x27;,</span><br><span class="line">&#x27;-isystem&#x27;,</span><br><span class="line">os.environ[&#x27;HOME&#x27;] + &#x27;/local/gcc-5.4.0/include/c++/5.4.0&#x27;,</span><br><span class="line">&#x27;-isystem&#x27;,</span><br><span class="line">os.environ[&#x27;HOME&#x27;] + &#x27;/local/gcc-5.4.0/include/c++/5.4.0/x86_64-unknown-linux-gnu&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是<code>x86_64-unknown-linux-gnu</code>目录必须添加进去，否则会导致C++标准库无法补全，因为C++标准库头文件包含了该目录下的各种头文件，比如<code>thread</code>包含的3个头文件：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;bits/functexcept.h&gt;</span><br><span class="line">#include &lt;bits/functional_hash.h&gt;</span><br><span class="line">#include &lt;bits/gthr.h&gt;</span><br></pre></td></tr></table></figure>
+
+<p>其中前2个都是出自<code>$GCC_DIR/include/c++/5.4.0/bits</code>目录，而第3个则是出自<code>$GCC_DIR/include/c++/5.4.0/x86_64-unknown-linux-gnu/bits</code>目录，因此必须把这个目录添加进去，否则头文件会解析失败。</p>
+<h2 id="3-ale静态语法检查"><a href="#3-ale静态语法检查" class="headerlink" title="3 ale静态语法检查"></a>3 ale静态语法检查</h2><h3 id="3-1-ale的安装和配置"><a href="#3-1-ale的安装和配置" class="headerlink" title="3.1 ale的安装和配置"></a>3.1 ale的安装和配置</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;w0rp/ale&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>其配置如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">&quot;&quot; ale</span><br><span class="line">let g:ale_linters = &#123;</span><br><span class="line">            \ &#x27;c&#x27;: [&#x27;gcc&#x27;, &#x27;cppcheck&#x27;],</span><br><span class="line">            \ &#x27;cpp&#x27;: [&#x27;g++&#x27;, &#x27;cppcheck&#x27;],</span><br><span class="line">            \ &#125;</span><br><span class="line">let g:ale_c_gcc_options = &#x27;-Wall -O2 -std=c99</span><br><span class="line">            \ -I .</span><br><span class="line">            \ -I /usr/include&#x27;</span><br><span class="line">let g:ale_cpp_gcc_options = &#x27;-Wall -O2 -std=c++11</span><br><span class="line">            \ -I .</span><br><span class="line">            \ -I /usr/include</span><br><span class="line">            \ -I $HOME/local/gcc-5.4.0/include/c++/5.4.0&#x27;</span><br><span class="line">let g:ale_c_cppcheck_options = &#x27;&#x27;</span><br><span class="line">let g:ale_cpp_cppcheck_options = &#x27;&#x27;</span><br><span class="line"></span><br><span class="line">let g:ale_linters_explicit = 1  &quot; 只显示运行ale_linters的文件</span><br><span class="line">let g:ale_completion_delay = 500</span><br><span class="line">let g:ale_echo_delay = 20</span><br><span class="line">let g:ale_lint_delay = 500</span><br><span class="line">let g:ale_echo_msg_format = &#x27;[%linter%] %code: %%s&#x27;</span><br><span class="line">let g:ale_lint_on_text_changed = &#x27;normal&#x27;  &quot; 防止YCM不停补全</span><br><span class="line">let g:ale_lint_on_insert_leave = 1</span><br></pre></td></tr></table></figure>
+
+<p>主要有用的是前面5个，后面照搬即可。<code>ale_c_gcc_options</code>和<code>ale_cpp_gcc_options</code>指定使用gcc&#x2F;g++进行静态语法检查时的选项，和编译时的选项相同，类似YCM的<code>.ycm_extra_conf.py</code>，但是必须在<code>.vimrc</code>中配置而不能作为项目独立的配置文件。</p>
+<p>另外，除了gcc&#x2F;g++外，ale还使用了cppcheck进行语法检查，它能够检查出一些未定义的行为，比如没有<code>fclose</code>关闭打开的<code>FILE</code>指针。从源安装的cppcheck版本较老，不支持C++11的语法，因此去下载<a target="_blank" rel="noopener" href="http://cppcheck.sourceforge.net/">cppcheck源码</a>手动编译。</p>
+<h3 id="3-2-安装cppcheck"><a href="#3-2-安装cppcheck" class="headerlink" title="3.2 安装cppcheck"></a>3.2 安装cppcheck</h3><p>要支持<code>HAVE_RULES</code>，需要安装<a target="_blank" rel="noopener" href="https://www.pcre.org/">pcre</a>，下载源码解压后，手动<code>./configure --prefix=&lt;dirname&gt;</code>、<code>make</code>、<code>make install</code>安装，然后在<code>~/.bashrc</code>中添加如下代码以指定gcc的包含路径和库路径：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">export C_INCLUDE_PATH=$LOCAL/pcre/include:$C_INCLUDE_PATH</span><br><span class="line">export CPLUS_INCLUDE_PATH=$LOCAL/pcre/include:$CPLUS_INCLUDE_PATH</span><br><span class="line">export LD_LIBRARY_PATH=$LOCAL/pcre/lib:$LD_LIBRARY_PATH</span><br><span class="line">export PATH=$LOCAL/pcre/bin:$PATH</span><br></pre></td></tr></table></figure>
+
+<p>然后进入cppcheck源码目录按照如下方式编译：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">make SRCDIR=build CFGDIR=$LOCAL/bin/cfg HAVE_RULES=yes</span><br><span class="line">make install PREFIX=$LOCAL CFGDIR=$LOCAL/bin/cfg</span><br></pre></td></tr></table></figure>
+
+<p>然后将<code>$LOCAL/bin</code>添加到<code>.bashrc</code>的环境变量中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">export PATH=$LOCAL/bin:$PATH</span><br></pre></td></tr></table></figure>
+
+<p>之后ale便可使用cppcheck进行语法检查，比如C++11语法下的资源泄漏检查：</p>
+<p><img src="/ale%E6%A3%80%E6%9F%A5%E8%B5%84%E6%BA%90%E6%B3%84%E6%BC%8F.jpg" alt="ale检查资源泄漏"></p>
+<p>除此之外还有其他功能，可参考<a target="_blank" rel="noopener" href="http://cppcheck.sourceforge.net/">cppcheck官网</a>的Undefined behaviour一栏。</p>
+<h2 id="4-其他插件"><a href="#4-其他插件" class="headerlink" title="4. 其他插件"></a>4. 其他插件</h2><p>其实最重要的补全、跳转插件都有了，其余的插件我也没详细研究，但也都配置了，使用开箱即用的功能，没有特别定制。</p>
+<h3 id="4-1-Ultisnips"><a href="#4-1-Ultisnips" class="headerlink" title="4.1 Ultisnips"></a>4.1 Ultisnips</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;SirVer/ultisnips&#x27;</span><br><span class="line">Plug &#x27;honza/vim-snippets&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>很多IDE都有自动生成代码的功能，比如输入main然后按回车或TAB键会自动生成main函数的模板代码，输入for按回车生成可供选择的多种for循环的模板代码。这里第1个插件提供了代码生成的功能，第2个插件则提供了各自语言的模板代码。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&quot; Do not use &lt;tab&gt; if you use YouCompleteMe</span><br><span class="line">let g:UltiSnipsExpandTrigger=&quot;&lt;tab&gt;&quot;</span><br><span class="line">let g:UltiSnipsJumpForwardTrigger=&quot;&lt;c-b&gt;&quot;</span><br><span class="line">let g:UltiSnipsJumpBackwardTrigger=&quot;&lt;c-z&gt;&quot;</span><br><span class="line"></span><br><span class="line">&quot; If you want :UltiSnipsEdit to split your window.</span><br><span class="line">let g:UltiSnipsEditSplit=&quot;vertical&quot;</span><br></pre></td></tr></table></figure>
+
+<p>暂时我还只停留在简单地使用现成模板上，比如<code>cl</code>生成类，<code>ns</code>生成命名空间，<code>main</code>生成main函数，当然，这些都会用TAB键触发，因此之前YCM的配置中禁止了TAB补全防止与其冲突。</p>
+<p>C++的snippets在<code>~/.vim/plugged/vim-snippets/snippets/cpp.snippets</code>文件定义，可以照着修改该文件来修改代码生成模板。</p>
+<h3 id="4-2-vim-clang-format"><a href="#4-2-vim-clang-format" class="headerlink" title="4.2 vim-clang-format"></a>4.2 vim-clang-format</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;rhysd/vim-clang-format&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>之前安装llvm中自带了<code>clang-format</code>，<code>vim-clang-format</code>是对它的集成。无需配置，安装好后，vim命令模式下<code>:ClangFormat</code>便可对当前文件自动格式化。当然也可以<code>nmap</code>设置快捷键，不过我也习惯了输入<code>:Cl</code>+TAB键格式化当前代码。</p>
+<p>代码格式化首先需要<code>clang-format</code>路径在环境变量<code>PATH</code>中（之前安装clang时已经配置过），然后从当前目录往上寻找<code>.clang-format</code>文件，我是直接用谷歌开源代码风格，比如我生成该文件在HOME目录下，命令如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">clang-format --style=Google --dump-config &gt;~/.clang-format</span><br></pre></td></tr></table></figure>
+
+<p>如果需要定制代码格式化文件，只需修改<code>.clang-format</code>即可，网上有各种资料。</p>
+<h3 id="4-3-C-头文件、源文件切换"><a href="#4-3-C-头文件、源文件切换" class="headerlink" title="4.3 C++头文件、源文件切换"></a>4.3 C++头文件、源文件切换</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;vim-scripts/a.vim&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>开箱即用，据说是很早的插件了，<code>:A</code>命令切换头文件和源文件，比如<code>xxx.h</code>和<code>xxx.cc</code>。<code>:AV</code>和<code>:AS</code>命令则是打开竖直、水平切分窗口来切换头文件和源文件。</p>
+<h3 id="4-4-asyncrun"><a href="#4-4-asyncrun" class="headerlink" title="4.4 asyncrun"></a>4.4 asyncrun</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;skywind3000/asyncrun.vim&#x27;</span><br></pre></td></tr></table></figure>
+
+<p><a target="_blank" rel="noopener" href="http://www.skywind.me/blog/">skywind</a>大佬（知乎账号为<em>韦易笑</em>，vim大神)写的插件，我的vim配置也大部分是参考他的<a target="_blank" rel="noopener" href="http://www.skywind.me/blog/archives/2084">Vim 8下C&#x2F;C++开发环境搭建</a>。这里也基本照搬配置了，使用说明可参考他的博客：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">&quot; 自动打开 quickfix window ，高度为 6</span><br><span class="line">let g:asyncrun_open = 6</span><br><span class="line"></span><br><span class="line">&quot; 任务结束时候响铃提醒</span><br><span class="line">let g:asyncrun_bell = 1</span><br><span class="line"></span><br><span class="line">&quot; 设置 F10 打开/关闭 Quickfix 窗口</span><br><span class="line">nnoremap &lt;F10&gt; :call asyncrun#quickfix_toggle(6)&lt;cr&gt;</span><br><span class="line"></span><br><span class="line">&quot; 设置 F9 编译单个文件</span><br><span class="line">nnoremap &lt;silent&gt; &lt;F9&gt; :AsyncRun g++ -std=c++11 -Wall -O2 &quot;$(VIM_FILEPATH)&quot; -o &quot;$(VIM_FILEDIR)/$(VIM_FILENOEXT)&quot; &lt;cr&gt;</span><br><span class="line"></span><br><span class="line">&quot; 递归查找包含该目录的目录作为根目录，若找不到则将文件所在目录作为当前目录</span><br><span class="line">let g:asyncrun_rootmarks = [&#x27;.svn&#x27;, &#x27;.git&#x27;, &#x27;.root&#x27;, &#x27;_darcs&#x27;, &#x27;build.xml&#x27;] </span><br><span class="line">&quot; 设置 F7 编译项目</span><br><span class="line">nnoremap &lt;silent&gt; &lt;F7&gt; :AsyncRun -cwd=&lt;root&gt; make &lt;cr&gt;</span><br><span class="line"></span><br><span class="line">&quot; 设置 F5 运行当前程序</span><br><span class="line">&quot;nnoremap &lt;silent&gt; &lt;F5&gt; :AsyncRun -raw -cwd=$(VIM_FILEDIR) &quot;$(VIM_FILEDIR)/$(VIM_FILENOEXT)&quot; &lt;cr&gt;</span><br><span class="line">nnoremap &lt;silent&gt; &lt;F5&gt; :AsyncRun g++ -std=c++11 -Wall &quot;$(VIM_FILEPATH)&quot; &amp;&amp; ./a.out &lt;cr&gt;&quot;</span><br></pre></td></tr></table></figure>
+
+<p>由于vim 8才支持了异步执行终端命令，因此该插件需要vim版本至少为8。我的vim版本为8.1，还可以直接在vim中横向打开终端窗口（命令为<code>terminal</code>，默认横向打开，<code>vert term</code>纵向打开）。</p>
+<h3 id="4-5-LeaderF"><a href="#4-5-LeaderF" class="headerlink" title="4.5 LeaderF"></a>4.5 LeaderF</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;Yggdroot/LeaderF&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>其配置照抄了skywind的</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">&quot;&quot; LeaderF</span><br><span class="line">&quot; Ctrl+P在当前项目目录打开文件搜索, Ctrl+N打开MRU搜索，搜索最近打开的文件</span><br><span class="line">&quot; Alt+P打开函数搜索，Alt+N打开Buffer搜索</span><br><span class="line">let g:Lf_ShortcutF = &#x27;&lt;c-p&gt;&#x27;</span><br><span class="line">let g:Lf_ShortcutB = &#x27;&lt;m-n&gt;&#x27;</span><br><span class="line">noremap &lt;c-n&gt; :LeaderfMru&lt;cr&gt;</span><br><span class="line">noremap &lt;m-p&gt; :LeaderfFunction!&lt;cr&gt;</span><br><span class="line">noremap &lt;m-n&gt; :LeaderfBuffer&lt;cr&gt;</span><br><span class="line">noremap &lt;m-m&gt; :LeaderfTag&lt;cr&gt;</span><br><span class="line">let g:Lf_StlSeparator = &#123; &#x27;left&#x27;: &#x27;&#x27;, &#x27;right&#x27;: &#x27;&#x27;, &#x27;font&#x27;: &#x27;&#x27; &#125;</span><br><span class="line"></span><br><span class="line">let g:Lf_RootMarkers = [&#x27;.project&#x27;, &#x27;.root&#x27;, &#x27;.svn&#x27;, &#x27;.git&#x27;]</span><br><span class="line">let g:Lf_WorkingDirectoryMode = &#x27;Ac&#x27;</span><br><span class="line">let g:Lf_WindowHeight = 0.30</span><br><span class="line">let g:Lf_CacheDirectory = expand(&#x27;~/.vim/cache&#x27;)</span><br><span class="line">let g:Lf_ShowRelativePath = 0</span><br><span class="line">let g:Lf_HideHelp = 1</span><br><span class="line">let g:Lf_StlColorscheme = &#x27;powerline&#x27;</span><br><span class="line">let g:Lf_PreviewResult = &#123;&#x27;Function&#x27;:0, &#x27;BufTag&#x27;:0&#125;</span><br></pre></td></tr></table></figure>
+
+<p>各种<code>Leaderf</code>开头的命令，可以<code>:LeaderfFunction</code>查找函数、<code>:LeaderfFile</code>查找文件，等等。我用得不是很多，所以配置基本上也没用。</p>
+<h3 id="4-6-vim-signify"><a href="#4-6-vim-signify" class="headerlink" title="4.6 vim-signify"></a>4.6 vim-signify</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;mhinz/vim-signify&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>配置仅需</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">set signcolumn=yes  &quot; 强制显示侧边栏，防止时有时无</span><br></pre></td></tr></table></figure>
+
+<p>可以实时显示git项目的修改状态，如下图所示：</p>
+<p><img src="/signify%E6%98%BE%E7%A4%BAgit%E9%A1%B9%E7%9B%AE%E4%BF%AE%E6%94%B9%E6%83%85%E5%86%B5.jpg" alt="signify显示git项目修改情况"></p>
+<h3 id="4-7-vim页面美化插件"><a href="#4-7-vim页面美化插件" class="headerlink" title="4.7 vim页面美化插件"></a>4.7 vim页面美化插件</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;sickill/vim-monokai&#x27;               &quot; monokai主题</span><br><span class="line">Plug &#x27;vim-airline/vim-airline&#x27;           &quot; 美化状态栏</span><br><span class="line">Plug &#x27;vim-airline/vim-airline-themes&#x27;</span><br><span class="line">Plug &#x27;plasticboy/vim-markdown&#x27;           &quot; markdown高亮</span><br><span class="line">Plug &#x27;octol/vim-cpp-enhanced-highlight&#x27;  &quot; C++代码高亮</span><br></pre></td></tr></table></figure>
+
+<p>配置如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">&quot;&quot; airline</span><br><span class="line">let laststatus = 2</span><br><span class="line">let g:airline_powerline_fonts = 1</span><br><span class="line">let g:airline_theme = &quot;dark&quot;</span><br><span class="line">let g:airline#extensions#tabline#enabled = 1</span><br><span class="line"></span><br><span class="line">&quot;&quot; vim-monokai</span><br><span class="line">colorscheme monokai</span><br><span class="line"></span><br><span class="line">&quot;&quot; vim-markdown</span><br><span class="line">&quot; Github风格markdown语法</span><br><span class="line">let g:vim_markdown_no_extensions_in_markdown = 1</span><br><span class="line"></span><br><span class="line">&quot;&quot; vim-cpp-enhanced-highlight</span><br><span class="line">let g:cpp_class_scope_highlight = 1</span><br><span class="line">let g:cpp_member_variable_highlight = 1</span><br><span class="line">let g:cpp_class_decl_highlight = 1</span><br><span class="line">let g:cpp_experimental_template_highlight = 1</span><br></pre></td></tr></table></figure>
+<h2 id="5-我自己写的简单代码模板"><a href="#5-我自己写的简单代码模板" class="headerlink" title="5. 我自己写的简单代码模板"></a>5. 我自己写的简单代码模板</h2><p>之前简单学了下vimscripts，简单写了点代码模板，即新建<code>.h</code>、<code>.c</code>、<code>.cc</code>、<code>.cpp</code>文件会自动生成相应代码。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">&quot; 代码模板</span><br><span class="line">autocmd BufNewFile *.cc,*.cpp,*.c exec &quot;:call SetTitle()&quot;</span><br><span class="line">function SetTitle()</span><br><span class="line">    if &amp;filetype == &#x27;cpp&#x27;</span><br><span class="line">        call setline(1, &quot;#include &lt;iostream&gt;&quot;)</span><br><span class="line">        call setline(2, &quot;using namespace std;&quot;)</span><br><span class="line">        call setline(3, &quot;&quot;)</span><br><span class="line">        call setline(4, &quot;int main(int argc, char* argv[]) &#123;&quot;)</span><br><span class="line">        call setline(5, &quot;  return 0;&quot;)</span><br><span class="line">        call setline(6, &quot;&#125;&quot;)</span><br><span class="line">    endif</span><br><span class="line">    if &amp;filetype == &#x27;c&#x27;</span><br><span class="line">        call setline(1, &quot;#include &lt;stdio.h&gt;&quot;)</span><br><span class="line">        call setline(2, &quot;#include &lt;stdlib.h&gt;&quot;)</span><br><span class="line">        call setline(3, &quot;&quot;)</span><br><span class="line">        call setline(4, &quot;int main(int argc, char* argv[]) &#123;&quot;)</span><br><span class="line">        call setline(5, &quot;  return 0;&quot;)</span><br><span class="line">        call setline(6, &quot;&#125;&quot;)</span><br><span class="line">    endif</span><br><span class="line">    &quot; 新建文件后自动定位到文件末尾</span><br><span class="line">    autocmd BufNewFile * normal G</span><br><span class="line">endfunction</span><br><span class="line"></span><br><span class="line">autocmd BufNewFile *.h exec &quot;:call SetTitleForH()&quot;</span><br><span class="line">function SetTitleForH()</span><br><span class="line">    let name = toupper(&quot;&quot;.expand(&quot;%&quot;))</span><br><span class="line">    let name = join(split(name, &#x27;\.&#x27;), &#x27;_&#x27;)</span><br><span class="line">    let name = join(split(name, &#x27;-&#x27;), &#x27;_&#x27;)</span><br><span class="line">    call setline(1, join([&#x27;#ifndef&#x27;, name]))</span><br><span class="line">    call setline(2, join([&#x27;#define&#x27;, name]))</span><br><span class="line">    call setline(3, join([&#x27;#endif  //&#x27;, name]))</span><br><span class="line">    exec &quot;:2&quot;</span><br><span class="line">endfunction</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-总结"><a href="#6-总结" class="headerlink" title="6. 总结"></a>6. 总结</h2><p>本篇介绍了搭建C&#x2F;C++开发环境中的一些插件，虽然对于一般人我可以算vim狂热者了，但是对于真正熟悉vim的人来说，我还有很多需要学习的，比如很多插件我也是浅尝辄止，但毕竟vim不同于IDE的一点就是其配置高度个人化，真正觉得需要提高效率了再去看看是不是需要详细了解下插件怎么用。</p>
+<p>我的vim-plug管理的插件如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">call plug#begin(&#x27;~/.vim/plugged&#x27;)</span><br><span class="line"></span><br><span class="line">Plug &#x27;Valloric/YouCompleteMe&#x27;</span><br><span class="line">Plug &#x27;scrooloose/nerdtree&#x27;, &#123; &#x27;on&#x27;: &#x27;NERDTreeToggle&#x27; &#125;</span><br><span class="line">Plug &#x27;w0rp/ale&#x27;</span><br><span class="line">Plug &#x27;SirVer/ultisnips&#x27;</span><br><span class="line">Plug &#x27;honza/vim-snippets&#x27;</span><br><span class="line">Plug &#x27;rhysd/vim-clang-format&#x27;</span><br><span class="line">Plug &#x27;vim-scripts/a.vim&#x27;</span><br><span class="line">Plug &#x27;skywind3000/asyncrun.vim&#x27;</span><br><span class="line">Plug &#x27;Yggdroot/LeaderF&#x27;</span><br><span class="line">Plug &#x27;mhinz/vim-signify&#x27;</span><br><span class="line">Plug &#x27;sickill/vim-monokai&#x27;               &quot; monokai主题</span><br><span class="line">Plug &#x27;vim-airline/vim-airline&#x27;           &quot; 美化状态栏</span><br><span class="line">Plug &#x27;vim-airline/vim-airline-themes&#x27;</span><br><span class="line">Plug &#x27;plasticboy/vim-markdown&#x27;           &quot; markdown高亮</span><br><span class="line">Plug &#x27;octol/vim-cpp-enhanced-highlight&#x27;  &quot; C++代码高亮</span><br><span class="line"></span><br><span class="line">call plug#end()</span><br></pre></td></tr></table></figure>
+
+<p>如果vim编辑比较卡的话，可以试着注释掉某些插件，比如我实测C++代码高亮有时候会拖慢速度。YCM如果配置于某些较为庞大的项目可能也有点问题。</p>
+<p><code>~/.vim/plugged</code>目录下各插件占用磁盘大小：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">$ du -h --max-depth=1 . | grep -v &quot;\.$&quot;</span><br><span class="line">512K    ./vim-clang-format</span><br><span class="line">1.8M    ./vim-snippets</span><br><span class="line">240K    ./a.vim</span><br><span class="line">8.8M    ./ultisnips</span><br><span class="line">1.4M    ./LeaderF</span><br><span class="line">436K    ./vim-cpp-enhanced-highlight</span><br><span class="line">908K    ./nerdtree</span><br><span class="line">1.9M    ./asyncrun.vim</span><br><span class="line">341M    ./YouCompleteMe</span><br><span class="line">992K    ./vim-markdown</span><br><span class="line">2.3M    ./vim-signify</span><br><span class="line">820K    ./vim-airline-themes</span><br><span class="line">1.2M    ./vim-airline</span><br><span class="line">24M     ./ale</span><br><span class="line">224K    ./vim-monokai</span><br></pre></td></tr></table></figure>
+
+<p>YCM目录包含了编译的文件，所以从200多M涨到了341M。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag"># 搭环境</a>
+              <a href="/tags/vim/" rel="tag"># vim</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/06/06/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-1-%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C/" rel="prev" title="我的vim开发环境搭建(1): 准备工作">
+      <i class="fa fa-chevron-left"></i> 我的vim开发环境搭建(1): 准备工作
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/06/21/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-3-Go%E5%BC%80%E5%8F%91%E9%85%8D%E7%BD%AE/" rel="next" title="我的vim开发环境搭建(3): Go开发配置">
+      我的vim开发环境搭建(3): Go开发配置 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-NERDTree"><span class="nav-number">1.</span> <span class="nav-text">1. NERDTree</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-YouCompleteMe"><span class="nav-number">2.</span> <span class="nav-text">2. YouCompleteMe</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-YCM%E7%9A%84%E5%AE%89%E8%A3%85"><span class="nav-number">2.1.</span> <span class="nav-text">2.1 YCM的安装</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-YCM%E7%9A%84%E9%85%8D%E7%BD%AE"><span class="nav-number">2.2.</span> <span class="nav-text">2.2 YCM的配置</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-ale%E9%9D%99%E6%80%81%E8%AF%AD%E6%B3%95%E6%A3%80%E6%9F%A5"><span class="nav-number">3.</span> <span class="nav-text">3 ale静态语法检查</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-ale%E7%9A%84%E5%AE%89%E8%A3%85%E5%92%8C%E9%85%8D%E7%BD%AE"><span class="nav-number">3.1.</span> <span class="nav-text">3.1 ale的安装和配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-2-%E5%AE%89%E8%A3%85cppcheck"><span class="nav-number">3.2.</span> <span class="nav-text">3.2 安装cppcheck</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%85%B6%E4%BB%96%E6%8F%92%E4%BB%B6"><span class="nav-number">4.</span> <span class="nav-text">4. 其他插件</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#4-1-Ultisnips"><span class="nav-number">4.1.</span> <span class="nav-text">4.1 Ultisnips</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-2-vim-clang-format"><span class="nav-number">4.2.</span> <span class="nav-text">4.2 vim-clang-format</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-3-C-%E5%A4%B4%E6%96%87%E4%BB%B6%E3%80%81%E6%BA%90%E6%96%87%E4%BB%B6%E5%88%87%E6%8D%A2"><span class="nav-number">4.3.</span> <span class="nav-text">4.3 C++头文件、源文件切换</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-4-asyncrun"><span class="nav-number">4.4.</span> <span class="nav-text">4.4 asyncrun</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-5-LeaderF"><span class="nav-number">4.5.</span> <span class="nav-text">4.5 LeaderF</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-6-vim-signify"><span class="nav-number">4.6.</span> <span class="nav-text">4.6 vim-signify</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-7-vim%E9%A1%B5%E9%9D%A2%E7%BE%8E%E5%8C%96%E6%8F%92%E4%BB%B6"><span class="nav-number">4.7.</span> <span class="nav-text">4.7 vim页面美化插件</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%88%91%E8%87%AA%E5%B7%B1%E5%86%99%E7%9A%84%E7%AE%80%E5%8D%95%E4%BB%A3%E7%A0%81%E6%A8%A1%E6%9D%BF"><span class="nav-number">5.</span> <span class="nav-text">5. 我自己写的简单代码模板</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">6. 总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

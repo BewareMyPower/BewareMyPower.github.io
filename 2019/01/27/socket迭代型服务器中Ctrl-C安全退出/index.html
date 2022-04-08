@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言最近抽空在重新造网络库轮子，之前的socket_util太过简陋，就是把socket地址、socket API、epoll和sendall、recvn之类的函数给封装下，发现自己的基础知识还是欠缺，于是边重做轮子边补充知识。于是在做最基本的迭代型服务器时遇到了问题，就是Ctrl+C退出循环失败，这里记录下解决方案。 1. 信号中断后自动重启的系统调用最初的解决思路如下 12345678910:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="socket迭代型服务器中Ctrl+C安全退出">
+<meta property="og:url" content="http://yoursite.com/2019/01/27/socket%E8%BF%AD%E4%BB%A3%E5%9E%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%ADCtrl-C%E5%AE%89%E5%85%A8%E9%80%80%E5%87%BA/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言最近抽空在重新造网络库轮子，之前的socket_util太过简陋，就是把socket地址、socket API、epoll和sendall、recvn之类的函数给封装下，发现自己的基础知识还是欠缺，于是边重做轮子边补充知识。于是在做最基本的迭代型服务器时遇到了问题，就是Ctrl+C退出循环失败，这里记录下解决方案。 1. 信号中断后自动重启的系统调用最初的解决思路如下 12345678910:">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-01-27T12:31:24.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.232Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="网络编程">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/01/27/socket%E8%BF%AD%E4%BB%A3%E5%9E%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%ADCtrl-C%E5%AE%89%E5%85%A8%E9%80%80%E5%87%BA/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>socket迭代型服务器中Ctrl+C安全退出 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/01/27/socket%E8%BF%AD%E4%BB%A3%E5%9E%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%ADCtrl-C%E5%AE%89%E5%85%A8%E9%80%80%E5%87%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          socket迭代型服务器中Ctrl+C安全退出
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-01-27 20:31:24" itemprop="dateCreated datePublished" datetime="2019-01-27T20:31:24+08:00">2019-01-27</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近抽空在重新造网络库轮子，之前的<a target="_blank" rel="noopener" href="https://github.com/BewareMyPower/socket_util">socket_util</a>太过简陋，就是把socket地址、socket API、epoll和<code>sendall</code>、<code>recvn</code>之类的函数给封装下，发现自己的基础知识还是欠缺，于是边重做轮子边补充知识。<br>于是在做最基本的迭代型服务器时遇到了问题，就是<code>Ctrl+C</code>退出循环失败，这里记录下解决方案。</p>
+<h2 id="1-信号中断后自动重启的系统调用"><a href="#1-信号中断后自动重启的系统调用" class="headerlink" title="1. 信号中断后自动重启的系统调用"></a>1. 信号中断后自动重启的系统调用</h2><p>最初的解决思路如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">::signal(SIGINT, [](int) &#123;&#125;);</span><br><span class="line">while (true) &#123;</span><br><span class="line">  // ...</span><br><span class="line">  int ret = some_system_call();  // 代替某些自动重启的系统调用</span><br><span class="line">  if (ret == -1) &#123;</span><br><span class="line">    if (errno == EINTR)</span><br><span class="line">      break;</span><br><span class="line">    // else ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>思路就是对于某些被信号中断后会自动重启的系统调用，检查返回值，为-1代表返回错误，然后检查<code>errno</code>，为<code>EINTR</code>就相当于被信号中断，此时跳出循环。<br>Linux上某些系统调用会导致阻塞，比如某些慢速I&#x2F;O操作(<code>read</code>、<code>write</code>、<code>recv</code>、<code>send</code>)，当然也包括socket的<code>accept</code>这种可以触发<code>epoll</code>监听事件的(在我看来算广义的I&#x2F;O操作)。如果对某个信号使用<code>sigaction</code>设置过信号处理器，并且时<code>sa_flags</code>字段包含<code>SA_RESTART</code>，那么这些系统调用在被该信号中断时会自动重启，避免了对<code>errno</code>的检查(像下面这样的代码)</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">int ret;</span><br><span class="line">while ((ret = some_system_call()) == -1 &amp;&amp; errno == EINTR) continue;</span><br></pre></td></tr></table></figure>
+<p>其中，<code>sigaction</code>使用示例如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">struct sigaction act;</span><br><span class="line">act.sa_handler = [](int) &#123;&#125;;  // 信号处理器</span><br><span class="line">act.sa_flags = SA_RESTART;    // 设置重启标志</span><br><span class="line">sigemptyset(&amp;act.sa_mask);</span><br><span class="line"></span><br><span class="line">sigaction(SIGINT, &amp;act, nullptr);  // 使信号处理器生效</span><br></pre></td></tr></table></figure>
+<p>当然，这种自动重启的功能仅对特定的系统调用有效，可以参考<em>The Linux Programming Interface</em>的21.5节，个人简单总结如下：</p>
+<ul>
+<li>socket的阻塞操作(<code>accept</code>、<code>connect</code>、<code>recv</code>、<code>send</code>等)；</li>
+<li>进程间IPC的阻塞操作(管道、FIFO、POSIX消息队列、信号量、文件锁)；</li>
+<li>线程同步的阻塞操作(条件变量的等待)</li>
+<li>终端的阻塞操作(比如向<code>STDOUT_FILENO</code>写或从<code>STDIN_FILENO</code>读)；</li>
+<li><code>wait</code>系列，等待子进程终止；</li>
+<li>可能会阻塞的<code>open</code>；</li>
+<li><code>futex</code>(Linux独有)；</li>
+</ul>
+<p>而像<code>epoll</code>这种I&#x2F;O多路复用的，即使指定<code>SA_RESTART</code>也不会自动重启。其实从设计的出发点看很好理解。</p>
+<h2 id="2-细节上的修改"><a href="#2-细节上的修改" class="headerlink" title="2. 细节上的修改"></a>2. 细节上的修改</h2><p>最初的解决方案在我实际应用中遇到了一些问题，比如这个循环是封装在我的库函数中的，而我需要传递一个回调函数给这个库函数来处理表示连接的socket用于读写。<br>这样问题来了，我在回调函数中如果是<code>while</code>循环来<code>recv</code>，那么在回调函数中是无法直接跳出所在函数的循环的，比如我的函数可能是这样</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">void runIterativeServer(std::function&lt;void(int)&gt; callback, ...) &#123;</span><br><span class="line">  // 1. 初始化socket相关操作...</span><br><span class="line">  // 2. 为SIGINT设置信号处理器</span><br><span class="line">  while (true) &#123;</span><br><span class="line">     // 3. accept得到connfd，处理errno为EINTR的情况</span><br><span class="line">     callback(connfd);  // 4. 执行回调函数</span><br><span class="line">     // 5. 关闭connfd</span><br><span class="line">  &#125;</span><br><span class="line">  // 6. 清理操作</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>解决方法很简单，处理<code>EINTR</code>时<code>continue</code>即可，用信号处理器来退出<code>while</code>循环</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">static volatile bool run = false;</span><br><span class="line">::signal(SIGINT, [](int) &#123; run = false; &#125;);</span><br><span class="line">run = true;</span><br><span class="line">while (run) &#123;</span><br><span class="line">  // ...</span><br><span class="line">  int ret = some_system_call();  // 代替某些自动重启的系统调用</span><br><span class="line">  if (ret == -1) &#123;</span><br><span class="line">    if (errno == EINTR)</span><br><span class="line">      break;</span><br><span class="line">    // else ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意细节，<code>static</code>和<code>volatile</code>。<br>使用<code>static</code>是因为信号处理器只能接受<code>void (*)(int)</code>这样的函数指针，不带捕获的<code>lambda</code>表达式可以与之兼容，但是带捕获的<code>lambda</code>表达式不行。本质上就是信号处理器只能处理全局变量。静态变量和全局变量本质是一样的，只是方便命名信息隔离，所以这里用函数内的静态变量。<br>使用<code>volatile</code>则是因为，开优化选项时编译器可能做某些优化来把<code>run</code>放到寄存器中读取而不是直接从内存读取，这样就会导致信号处理器的修改并不会被看到，从而<code>while</code>循环仍然判定为<code>true</code>，之前写过相关博客<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/0388f6f21fe0">C&#x2F;C++的volatile关键字应用示例</a>。</p>
+<p>这样一来在回调函数中就可以写出这样的代码了</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">char buf[1024];</span><br><span class="line">while (true) &#123;</span><br><span class="line">  ssize_t num_recv = recv(connfd, buf, sizeof(buf), MSG_NOSIGNAL);</span><br><span class="line">  if (num_recv == -1 &amp;&amp; errno == EINTR) break;</span><br><span class="line">  // ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>到这里其实还有个很关键的问题，也是很容易被忽视的。其实无论是这个版本还是之前的版本，都是无效的，因为系统调用还是会自动重启，语句根本执行不到检查<code>errno</code>那一步。<br>原因是<code>Linux</code>的<code>signal</code>函数，默认是调用<code>sigaction</code>，并且将<code>sa_flags</code>设置为<code>SA_RESTART</code>，从而支持某些系统调用自动重启。在其他系统上，<code>signal</code>也可能具有不同的语义，因此必须手动调用<code>sigaction</code>来代替<code>signal</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">struct sigaction act;</span><br><span class="line">act.sa_flags = 0;    // 禁止系统调用自动重启</span><br><span class="line">// ...</span><br></pre></td></tr></table></figure>
+<p>参考<em>Unix环境高级编程</em>的10.14节。<br>最后，可以用<code>sigaction</code>取得之前的信号处理器，然后在函数结束时恢复<code>SIGINT</code>的默认处置。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">struct sigaction act, oldact;</span><br><span class="line">// TODO: 设置act的字段</span><br><span class="line">sigaction(SIGINT, &amp;act, &amp;oldact);</span><br><span class="line">// ...</span><br><span class="line">sigaction(SIGINT, &amp;oldact, nullptr);</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" rel="tag"># 网络编程</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/12/31/C-11%E4%B8%ADstd-thread%E5%92%8Cpthread%E6%B7%B7%E7%94%A8%E7%9A%84%E5%9D%91/" rel="prev" title="C++11中std::thread和pthread混用的坑">
+      <i class="fa fa-chevron-left"></i> C++11中std::thread和pthread混用的坑
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/04/14/make-shared%E8%B0%83%E7%94%A8%E7%A7%81%E6%9C%89%E6%9E%84%E9%80%A0%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95/" rel="next" title="make_shared调用私有构造函数的解决方法">
+      make_shared调用私有构造函数的解决方法 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BF%A1%E5%8F%B7%E4%B8%AD%E6%96%AD%E5%90%8E%E8%87%AA%E5%8A%A8%E9%87%8D%E5%90%AF%E7%9A%84%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">2.</span> <span class="nav-text">1. 信号中断后自动重启的系统调用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%BB%86%E8%8A%82%E4%B8%8A%E7%9A%84%E4%BF%AE%E6%94%B9"><span class="nav-number">3.</span> <span class="nav-text">2. 细节上的修改</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

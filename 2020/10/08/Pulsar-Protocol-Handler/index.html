@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 概述本文主要目的是阅读 Pulsar protocol handler（比如 KoP，AoP，MoP）在 broker 中如何运作的，protocol handler（下文简称 handler）对应的是包 org.apache.pulsar.broker.protocol（下文将略去包括 broker  之前的包前缀）的接口 ProtocolHandler，只要实现了该接口，并打包成">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pulsar Protocol Handler">
+<meta property="og:url" content="http://yoursite.com/2020/10/08/Pulsar-Protocol-Handler/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 概述本文主要目的是阅读 Pulsar protocol handler（比如 KoP，AoP，MoP）在 broker 中如何运作的，protocol handler（下文简称 handler）对应的是包 org.apache.pulsar.broker.protocol（下文将略去包括 broker  之前的包前缀）的接口 ProtocolHandler，只要实现了该接口，并打包成">
+<meta property="og:locale">
+<meta property="article:published_time" content="2020-10-08T15:49:23.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.225Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Pulsar">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/10/08/Pulsar-Protocol-Handler/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Pulsar Protocol Handler | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/10/08/Pulsar-Protocol-Handler/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Pulsar Protocol Handler
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2020-10-08 23:49:23" itemprop="dateCreated datePublished" datetime="2020-10-08T23:49:23+08:00">2020-10-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>本文主要目的是阅读 <a target="_blank" rel="noopener" href="https://github.com/apache/pulsar">Pulsar</a> protocol handler（比如 KoP，AoP，MoP）在 broker 中如何运作的，protocol handler（下文简称 <strong>handler</strong>）对应的是包 <code>org.apache.pulsar.broker.protocol</code>（下文将<strong>略去包括 <code>broker</code>  之前的包前缀</strong>）的接口 <code>ProtocolHandler</code>，只要实现了该接口，并打包成 <code>*.nar</code> 后缀以供 broker 加载，即相当于实现了一个 handler。</p>
+<h2 id="handler-初始化"><a href="#handler-初始化" class="headerlink" title="handler 初始化"></a>handler 初始化</h2><p><code>ProtocolHandler</code> 本身位于 <code>protocol</code> 包下，注意到初始化方法 <code>initialize</code>，找到它的使用，在 <code>ProtocolHandlerWithClassLoader</code> 类的同名方法被调用，简单看下代码实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="meta">@RequiredArgsConstructor</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ProtocolHandlerWithClassLoader</span> <span class="keyword">implements</span> <span class="title class_">ProtocolHandler</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ProtocolHandler handler;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> NarClassLoader classLoader;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">initialize</span><span class="params">(ServiceConfiguration conf)</span> <span class="keyword">throws</span> Exception &#123;</span><br><span class="line">        handler.initialize(conf);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/* 其他方法都是 override handler 的同名方法，比如 xxx()，都是直接调用 handler.xxx() */</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">close</span><span class="params">()</span> &#123;</span><br><span class="line">        handler.close();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            classLoader.close();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">            log.warn(<span class="string">&quot;Failed to close the protocol handler class loader&quot;</span>, e);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>仅仅是在构造时多传入了一个 <code>NarClassLoader</code> 对象，并且在 override <code>close()</code> 方法时关闭这个对象，其他方法都是直接调用 handler 的同名方法。</p>
+<p>继续查找 <code>initialize()</code> 方法的调用，又被 <code>ProtocolHandlers</code> 类的同名方法调用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">initialize</span><span class="params">(ServiceConfiguration conf)</span> <span class="keyword">throws</span> Exception &#123;</span><br><span class="line">    <span class="keyword">for</span> (ProtocolHandler handler : handlers.values()) &#123;</span><br><span class="line">        handler.initialize(conf);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, ProtocolHandlerWithClassLoader&gt; handlers;</span><br><span class="line"></span><br><span class="line">ProtocolHandlers(Map&lt;String, ProtocolHandlerWithClassLoader&gt; handlers) &#123;</span><br><span class="line">    <span class="built_in">this</span>.handlers = handlers;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见 <code>ProtocolHandlers</code> 维护了一系列 <code>ProtocolHandlerWithClassLoader</code>，并在构造时传入。而它的构造则在静态方法 <code>load</code> 中：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> ProtocolHandlers <span class="title function_">load</span><span class="params">(ServiceConfiguration conf)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 在配置 protocolHandlerDirectory 对应的目录下查找所有的 handler definitions，并暂时解压到配置 narExtractionDirectory 目录下</span></span><br><span class="line">    <span class="type">ProtocolHandlerDefinitions</span> <span class="variable">definitions</span> <span class="operator">=</span></span><br><span class="line">        ProtocolHandlerUtils.searchForHandlers(conf.getProtocolHandlerDirectory(), conf.getNarExtractionDirectory());</span><br><span class="line"></span><br><span class="line">    ImmutableMap.Builder&lt;String, ProtocolHandlerWithClassLoader&gt; handlersBuilder = ImmutableMap.builder();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 遍历配置 messagingProtocols 列表的每个 protocol</span></span><br><span class="line">    conf.getMessagingProtocols().forEach(protocol -&gt; &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2.1 取得 protocol 名字对应的 definition</span></span><br><span class="line">        <span class="type">ProtocolHandlerMetadata</span> <span class="variable">definition</span> <span class="operator">=</span> definitions.handlers().get(protocol);</span><br><span class="line">        <span class="keyword">if</span> (<span class="literal">null</span> == definition) &#123;</span><br><span class="line">            <span class="comment">/* 抛出异常表示 protocol handler is found */</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        ProtocolHandlerWithClassLoader handler;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 2.2 加载 definition 对应的 handler</span></span><br><span class="line">            handler = ProtocolHandlerUtils.load(definition, conf.getNarExtractionDirectory());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">            <span class="comment">/* 记录错误日志并抛出异常表示 Failed to load the protocol handler */</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2.3 通过 handler 的 accept 方法判断 protocol 是否可接受</span></span><br><span class="line">        <span class="keyword">if</span> (!handler.accept(protocol)) &#123;</span><br><span class="line">            <span class="comment">/* 关闭 handler，记录错误日志并抛出异常表示 Malformed protocol handler found */</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2.4 将 protocol 和 handler 作为 key-value 加入 map</span></span><br><span class="line">        handlersBuilder.put(protocol, handler);</span><br><span class="line">        log.info(<span class="string">&quot;Successfully loaded protocol handler for protocol `&#123;&#125;`&quot;</span>, protocol);</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">ProtocolHandlers</span>(handlersBuilder.build());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面代码注释给出了初始化流程，比如修改配置（<code>conf/broker.conf</code> 或 <code>conf/standalone.conf</code>）：</p>
+<figure class="highlight properties"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 默认目录就是 ./protocols</span></span><br><span class="line"><span class="attr">protocolHandlerDirectory</span>=<span class="string">./protocols</span></span><br><span class="line"><span class="attr">messagingProtocols</span>=<span class="string">kafka</span></span><br></pre></td></tr></table></figure>
+
+<p>就会在 <code>./protocols</code> 目录下面查找所有 handler definition，然后找到协议名 <code>kafka</code> 对应的 definition，期间会调用 handler 的 <code>initialize</code> 方法进行初始化。初始化完成后还要调用 handler 的 <code>accept</code> 方法判断是否被接受。最后和 <code>kafka</code> 组成键值对交由 <code>Protocols</code> 类管理。</p>
+<p>这里回顾下 handler 的这两个接口（略去 javadoc 注释）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">boolean</span> <span class="title function_">accept</span><span class="params">(String protocol)</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> <span class="title function_">initialize</span><span class="params">(ServiceConfiguration conf)</span> <span class="keyword">throws</span> Exception;</span><br></pre></td></tr></table></figure>
+
+<h2 id="definition"><a href="#definition" class="headerlink" title="definition"></a>definition</h2><p>在上一节，引入了 handler definition 的概念，这里看看其实现。首先是取得所有 definition 的 <code>searchForHandlers</code> 方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> ProtocolHandlerDefinitions <span class="title function_">searchForHandlers</span><span class="params">(String handlersDirectory,</span></span><br><span class="line"><span class="params">                                                           String narExtractionDirectory)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="type">Path</span> <span class="variable">path</span> <span class="operator">=</span> Paths.get(handlersDirectory).toAbsolutePath();</span><br><span class="line">    log.info(<span class="string">&quot;Searching for protocol handlers in &#123;&#125;&quot;</span>, path);</span><br><span class="line"></span><br><span class="line">    <span class="type">ProtocolHandlerDefinitions</span> <span class="variable">handlers</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ProtocolHandlerDefinitions</span>();</span><br><span class="line">    <span class="keyword">if</span> (!path.toFile().exists()) &#123;</span><br><span class="line">        <span class="comment">/* warn 日志提示目录不存在 */</span></span><br><span class="line">        <span class="keyword">return</span> handlers;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> (DirectoryStream&lt;Path&gt; stream = Files.newDirectoryStream(path, <span class="string">&quot;*.nar&quot;</span>)) &#123;</span><br><span class="line">        <span class="keyword">for</span> (Path archive : stream) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// 1. 从 nar 包中取得 definition</span></span><br><span class="line">                <span class="type">ProtocolHandlerDefinition</span> <span class="variable">phDef</span> <span class="operator">=</span></span><br><span class="line">                    ProtocolHandlerUtils.getProtocolHandlerDefinition(archive.toString(), narExtractionDirectory);</span><br><span class="line">                log.info(<span class="string">&quot;Found protocol handler from &#123;&#125; : &#123;&#125;&quot;</span>, archive, phDef);</span><br><span class="line"></span><br><span class="line">                checkArgument(StringUtils.isNotBlank(phDef.getName()));</span><br><span class="line">                checkArgument(StringUtils.isNotBlank(phDef.getHandlerClass()));</span><br><span class="line"></span><br><span class="line">                <span class="comment">// 2. 将 definition 和 nar 包路径组成 metadata</span></span><br><span class="line">                <span class="type">ProtocolHandlerMetadata</span> <span class="variable">metadata</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ProtocolHandlerMetadata</span>();</span><br><span class="line">                metadata.setDefinition(phDef);</span><br><span class="line">                metadata.setArchivePath(archive);</span><br><span class="line"></span><br><span class="line">                <span class="comment">// 3. 将 definition name 作为 key 加入返回的 map</span></span><br><span class="line">                handlers.handlers().put(phDef.getName(), metadata);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                <span class="comment">/* warn 日志提示加载失败 */</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> handlers;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到会从 <code>protocolHandlerDirectory</code> 所在目录下面找到所有 <code>*.nar</code> 后缀的文件，然后取得 definition：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> ProtocolHandlerDefinition <span class="title function_">getProtocolHandlerDefinition</span><span class="params">(String narPath, String narExtractionDirectory)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 解压 *.nar 包到 narExtractionDirectory，并从解压目录构造 NarClassLoader</span></span><br><span class="line">    <span class="keyword">try</span> (<span class="type">NarClassLoader</span> <span class="variable">ncl</span> <span class="operator">=</span> NarClassLoader.getFromArchive(<span class="keyword">new</span> <span class="title class_">File</span>(narPath), Collections.emptySet(), narExtractionDirectory)) &#123;</span><br><span class="line">        <span class="comment">// 2. 从 NarClassLoader 中取得 definition</span></span><br><span class="line">        <span class="keyword">return</span> getProtocolHandlerDefinition(ncl);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> ProtocolHandlerDefinition <span class="title function_">getProtocolHandlerDefinition</span><span class="params">(NarClassLoader ncl)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 取得 META-INF/services/pulsar-protocol-handler.yml 的配置内容，以 KoP 为例：</span></span><br><span class="line">    <span class="comment">//   name: kafka</span></span><br><span class="line">    <span class="comment">//   description: Kafka Protocol Handler</span></span><br><span class="line">    <span class="comment">//   handlerClass: io.streamnative.pulsar.handlers.kop.KafkaProtocolHandler</span></span><br><span class="line">    <span class="comment">// 也就是 ProtocolHandlerDefinition 的 3 个字段</span></span><br><span class="line">    <span class="type">String</span> <span class="variable">configStr</span> <span class="operator">=</span> ncl.getServiceDefinition(PULSAR_PROTOCOL_HANDLER_DEFINITION_FILE);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 解析 YAML 配置，从中得到 definition 的 class，也就是将配置文件的三个字段填充进来</span></span><br><span class="line">    <span class="keyword">return</span> ObjectMapperFactory.getThreadLocalYaml().readValue(</span><br><span class="line">        configStr, ProtocolHandlerDefinition.class</span><br><span class="line">    );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>至此，我们知道了 definition 其实就是从 nar 包中解析 <code>pulsar-protocol-handler.yml</code> 得到对应的三个字段（都是 <code>String</code> 类型）：</p>
+<ul>
+<li><code>name</code>：协议名，比如 KoP 的协议名为 kafka</li>
+<li><code>description</code>：handler 的描述信息</li>
+<li><code>handlerClass</code>：handler 的主类</li>
+</ul>
+<p>回顾前一节的 <code>load()</code> 方法注释 2.3，definition 的协议名是返回的 definition map 的 key，因此可以通过用户配置的 <code>messagingProtocols</code> 来找到对应的 definition，从而找到对应的 handler：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 这里的 definition 变量其实是 definition + handler 解压目录的路径</span></span><br><span class="line"><span class="type">ProtocolHandlerMetadata</span> <span class="variable">definition</span> <span class="operator">=</span> definitions.handlers().get(protocol);</span><br></pre></td></tr></table></figure>
+
+<h2 id="handler-的启动"><a href="#handler-的启动" class="headerlink" title="handler 的启动"></a>handler 的启动</h2><p>前文提到了 <code>ProtocolHandlers#load</code> 从配置文件中找到 nar 包解压后并加载得到 handlers，而 <code>load</code> 方法在 <code>PulsarService#start</code> 中被调用，并且对加载的 handlers 进行其他处理：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">protocolHandlers = ProtocolHandlers.load(config);</span><br><span class="line">protocolHandlers.initialize(config);</span><br><span class="line"><span class="comment">/* 其他初始化及启动流程（略） */</span></span><br><span class="line"><span class="built_in">this</span>.protocolHandlers.start(brokerService);</span><br><span class="line"><span class="comment">// 第一个 key 为协议名，第二个 key 为 handler 绑定的地址</span></span><br><span class="line">Map&lt;String, Map&lt;InetSocketAddress, ChannelInitializer&lt;SocketChannel&gt;&gt;&gt; protocolHandlerChannelInitializers =</span><br><span class="line">    <span class="built_in">this</span>.protocolHandlers.newChannelInitializers();</span><br><span class="line"><span class="built_in">this</span>.brokerService.startProtocolHandlers(protocolHandlerChannelInitializers);</span><br><span class="line"></span><br><span class="line">state = State.Started; <span class="comment">// 加载完 handlers 后 broker 的状态才改为 Started</span></span><br></pre></td></tr></table></figure>
+
+<p>最后一步涉及到了 <code>BrokerService#startProtocolHandlers</code> 会启动 handler 创建的 <code>ChannelInitializer&lt;SocketChannel&gt;</code>，其实现为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">startProtocolHandlers</span><span class="params">(</span></span><br><span class="line"><span class="params">    Map&lt;String, Map&lt;InetSocketAddress, ChannelInitializer&lt;SocketChannel&gt;&gt;&gt; protocolHandlers)</span> &#123;</span><br><span class="line"></span><br><span class="line">    protocolHandlers.forEach((protocol, initializers) -&gt; &#123;</span><br><span class="line">        initializers.forEach((address, initializer) -&gt; &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                startProtocolHandler(protocol, address, initializer);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">                <span class="comment">/* 异常处理... */</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">startProtocolHandler</span><span class="params">(String protocol,</span></span><br><span class="line"><span class="params">                                  SocketAddress address,</span></span><br><span class="line"><span class="params">                                  ChannelInitializer&lt;SocketChannel&gt; initializer)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="type">ServerBootstrap</span> <span class="variable">bootstrap</span> <span class="operator">=</span> defaultServerBootstrap.clone();</span><br><span class="line">    bootstrap.childHandler(initializer);</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        bootstrap.bind(address).sync(); <span class="comment">// handler 对应的服务绑定了相应的端口</span></span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        <span class="comment">/* 异常处理 */</span></span><br><span class="line">    &#125;</span><br><span class="line">    log.info(<span class="string">&quot;Successfully bind protocol `&#123;&#125;` on &#123;&#125;&quot;</span>, protocol, address);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>至此，加载并启动 handlers 的流程就出来了：</p>
+<ol>
+<li><p>通过配置 <code>protocolHandlerDirectory</code> 找到目录下所有 nar 包并解压，通过解析 YAML 文件得到 handler 的名字和主类，通过 <code>NarClassLoader</code> 加载主类并转型为 <code>ProtocolHandler</code> 接口；</p>
+</li>
+<li><p>调用 handler 的 <code>accept</code> 方法判断协议是否被接受，加载所有接受的 handlers；</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">boolean</span> <span class="title function_">accept</span><span class="params">(String protocol)</span>;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>传入 broker 的配置到 <code>initialize</code> 中初始化加载的 handlers；</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> <span class="title function_">initialize</span><span class="params">(ServiceConfiguration conf)</span> <span class="keyword">throws</span> Exception;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>将 <code>BrokerService</code> 对象传入各 handler 的 <code>start</code> 方法启动</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> <span class="title function_">start</span><span class="params">(BrokerService service)</span>;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>创建 handler 对应的 channel initializers 交由 <code>BrokerService</code> 启动，也就是在这一步，handler 被单独作为一个服务启动，比如 KoP 在这里就会默认绑定 9092 端口提供服务</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;InetSocketAddress, ChannelInitializer&lt;SocketChannel&gt;&gt; <span class="title function_">newChannelInitializers</span><span class="params">()</span>;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p>这几步完成后，broker 就不会干预 handler 了，除非 broker 本身关闭。而 handler 作为一个相对独立的服务，和 broker 的交互全部借由 <code>start()</code> 方法中得到的 <code>BrokerService</code> 对象来进行。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Pulsar/" rel="tag"># Pulsar</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/10/07/Java-CompletableFuture-%E5%AD%A6%E4%B9%A0/" rel="prev" title="Java CompletableFuture 学习">
+      <i class="fa fa-chevron-left"></i> Java CompletableFuture 学习
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/05/09/%E5%86%8D%E6%8E%A2-CompletableFuture/" rel="next" title="再探 CompletableFuture">
+      再探 CompletableFuture <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A6%82%E8%BF%B0"><span class="nav-number">1.</span> <span class="nav-text">概述</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#handler-%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="nav-number">2.</span> <span class="nav-text">handler 初始化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#definition"><span class="nav-number">3.</span> <span class="nav-text">definition</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#handler-%E7%9A%84%E5%90%AF%E5%8A%A8"><span class="nav-number">4.</span> <span class="nav-text">handler 的启动</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

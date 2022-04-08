@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="1. Go的安装嗯因为Go的官网被墙了所以需要自行准备梯子。Linux安装Go很简单，即使是CentOS 6，直接去golang下载页下载二进制文件解压即可，比如我写这篇博客时的最新版本是1.12.6，下载解压即可： 1234wget https:&#x2F;&#x2F;dl.google.com&#x2F;go&#x2F;go1.12.6.linux-amd64.tar.gztar zxvf go1.12.6.linux-amd64.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="我的vim开发环境搭建(3): Go开发配置">
+<meta property="og:url" content="http://yoursite.com/2019/06/21/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-3-Go%E5%BC%80%E5%8F%91%E9%85%8D%E7%BD%AE/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="1. Go的安装嗯因为Go的官网被墙了所以需要自行准备梯子。Linux安装Go很简单，即使是CentOS 6，直接去golang下载页下载二进制文件解压即可，比如我写这篇博客时的最新版本是1.12.6，下载解压即可： 1234wget https:&#x2F;&#x2F;dl.google.com&#x2F;go&#x2F;go1.12.6.linux-amd64.tar.gztar zxvf go1.12.6.linux-amd64.">
+<meta property="og:locale">
+<meta property="og:image" content="http://yoursite.com/YCM%E5%AF%B9Go%E7%9A%84%E8%A1%A5%E5%85%A8.jpg">
+<meta property="article:published_time" content="2019-06-20T16:00:49.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.238Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="搭环境">
+<meta property="article:tag" content="vim">
+<meta property="article:tag" content="golang">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/YCM%E5%AF%B9Go%E7%9A%84%E8%A1%A5%E5%85%A8.jpg">
+
+<link rel="canonical" href="http://yoursite.com/2019/06/21/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-3-Go%E5%BC%80%E5%8F%91%E9%85%8D%E7%BD%AE/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>我的vim开发环境搭建(3): Go开发配置 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/06/21/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-3-Go%E5%BC%80%E5%8F%91%E9%85%8D%E7%BD%AE/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          我的vim开发环境搭建(3): Go开发配置
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-06-21 00:00:49" itemprop="dateCreated datePublished" datetime="2019-06-21T00:00:49+08:00">2019-06-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="1-Go的安装"><a href="#1-Go的安装" class="headerlink" title="1. Go的安装"></a>1. Go的安装</h2><p>嗯因为Go的官网被墙了所以需要自行准备梯子。Linux安装Go很简单，即使是CentOS 6，直接去<a target="_blank" rel="noopener" href="https://golang.org/dl/">golang下载页</a>下载二进制文件解压即可，比如我写这篇博客时的最新版本是1.12.6，下载解压即可：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">wget https://dl.google.com/go/go1.12.6.linux-amd64.tar.gz</span><br><span class="line">tar zxvf go1.12.6.linux-amd64.tar.gz -C ~/local/</span><br><span class="line">cd ~/local/go</span><br><span class="line">mkdir gopath</span><br></pre></td></tr></table></figure>
+
+<p>我这里依旧是解压到<code>~/local</code>目录，另外新建了<code>gopath</code>目录。然后在<code>~/.bashrc</code>中添加环境变量：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">export PATH=$LOCAL/go/bin:$PATH</span><br><span class="line">export GOROOT=$LOCAL/go</span><br><span class="line">export GOPATH=$GOROOT/gopath</span><br><span class="line">export GOBIN=$GOPATH/bin</span><br></pre></td></tr></table></figure>
+
+<p><code>GOROOT</code>指的是Go的安装目录，而<code>GOPATH</code>则是自定义路径，不一定要在<code>GOROOT</code>下，而且可以有多个路径，每个路径代表Go的一个工作区，一般的工作区由<code>src</code>、<code>pkg</code>、<code>bin</code>三个目录组成，比如<code>go get</code>远程下载的项目，而<code>GOBIN</code>则是安装的二进制文件的路径。</p>
+<h2 id="2-重新编译YCM"><a href="#2-重新编译YCM" class="headerlink" title="2. 重新编译YCM"></a>2. 重新编译YCM</h2><p>之前安装的YCM能够对C&#x2F;C++进行补全，要对Go进行补全需要加上<code>--go-completer</code>选项重新编译，不过由于已经存放过编译的中间文件了，所以这次编译会很快。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CC=&quot;$LOCAL/gcc-5.4.0/bin/gcc&quot; CXX=&quot;$LOCAL/gcc-5.4.0/bin/g++&quot; ./install.py  \</span><br><span class="line">  --clang-completer --system-libclang --go-completer</span><br></pre></td></tr></table></figure>
+
+<p>编译完毕后基本的补全功能已经有了，如下图所示：</p>
+<p><img src="/YCM%E5%AF%B9Go%E7%9A%84%E8%A1%A5%E5%85%A8.jpg" alt="YCM对Go的补全"></p>
+<p>Go的编码规范建议使用TAB而非空格表示缩进，因此之前的vim配置中<code>set expandtab</code>最好注释掉，防止把TAB扩展成空格。</p>
+<p>YCM对Go的补全无需像C++一样通过<code>.ycm_extra.conf.py</code>脚本来指定头文件包含目录的，它是通过直接分析处于<code>$GOROOT/pkg</code>或<code>GOPATH/pkg</code>下的静态库<code>.a</code>文件来获取补全信息的。</p>
+<p>由于Go标准库的静态库已经编译好，位于<code>$GOROOT/pkg/$GOOS_$GOARCH</code>目录下，环境变量可通过<code>go env</code>命令来查询。而对于<code>go get</code>或者<code>$GOPATH/src</code>下的项目，如果没有编译成静态库，YCM是无法补全的，因此要用到某些包时需要首先进入包所在目录<code>go install</code>。</p>
+<p>如果使用了本地包比如<code>import &quot;./local&quot;</code>，那么需要把<code>local.a</code>文件拷贝到和当前<code>.go</code>文件同一目录。</p>
+<h2 id="3-vim-go"><a href="#3-vim-go" class="headerlink" title="3. vim-go"></a>3. vim-go</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Plug &#x27;fatih/vim-go&#x27;, &#123; &#x27;do&#x27;: &#x27;:GoUpdateBinaries&#x27; &#125;</span><br></pre></td></tr></table></figure>
+
+<p>安装、使用可参考<a target="_blank" rel="noopener" href="https://github.com/fatih/vim-go">vim-go</a>的README，某些二进制文件地址被墙了，所以需要去镜像站下载。</p>
+<p>然而打开.go文件时会提示</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim-go: could not find &#x27;gopls&#x27;. Run :GoInstallBinaries to fix it</span><br></pre></td></tr></table></figure>
+
+<p>然而用<code>:GoInstallBinaries</code>会失败，因为某些二进制文件被墙了，打开vim-go项目目录下的<code>plugin/go.vim</code>可以找到：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">&quot; these packages are used by vim-go and can be automatically installed if</span><br><span class="line">&quot; needed by the user with GoInstallBinaries.</span><br><span class="line">let s:packages = &#123;</span><br><span class="line">      \ &#x27;asmfmt&#x27;:        [&#x27;github.com/klauspost/asmfmt/cmd/asmfmt&#x27;],</span><br><span class="line">      \ &#x27;dlv&#x27;:           [&#x27;github.com/go-delve/delve/cmd/dlv&#x27;],</span><br><span class="line">      \ &#x27;errcheck&#x27;:      [&#x27;github.com/kisielk/errcheck&#x27;],</span><br><span class="line">      \ &#x27;fillstruct&#x27;:    [&#x27;github.com/davidrjenni/reftools/cmd/fillstruct&#x27;],</span><br><span class="line">      \ &#x27;gocode&#x27;:        [&#x27;github.com/mdempsky/gocode&#x27;, &#123;&#x27;windows&#x27;: [&#x27;-ldflags&#x27;, &#x27;-H=windowsgui&#x27;]&#125;],</span><br><span class="line">      \ &#x27;gocode-gomod&#x27;:  [&#x27;github.com/stamblerre/gocode&#x27;],</span><br><span class="line">      \ &#x27;godef&#x27;:         [&#x27;github.com/rogpeppe/godef&#x27;],</span><br><span class="line">      \ &#x27;gogetdoc&#x27;:      [&#x27;github.com/zmb3/gogetdoc&#x27;],</span><br><span class="line">      \ &#x27;goimports&#x27;:     [&#x27;golang.org/x/tools/cmd/goimports&#x27;],</span><br><span class="line">      \ &#x27;golint&#x27;:        [&#x27;golang.org/x/lint/golint&#x27;],</span><br><span class="line">      \ &#x27;gopls&#x27;:         [&#x27;golang.org/x/tools/cmd/gopls&#x27;],</span><br><span class="line">      \ &#x27;gometalinter&#x27;:  [&#x27;github.com/alecthomas/gometalinter&#x27;],</span><br><span class="line">      \ &#x27;golangci-lint&#x27;: [&#x27;github.com/golangci/golangci-lint/cmd/golangci-lint&#x27;],</span><br><span class="line">      \ &#x27;gomodifytags&#x27;:  [&#x27;github.com/fatih/gomodifytags&#x27;],</span><br><span class="line">      \ &#x27;gorename&#x27;:      [&#x27;golang.org/x/tools/cmd/gorename&#x27;],</span><br><span class="line">      \ &#x27;gotags&#x27;:        [&#x27;github.com/jstemmer/gotags&#x27;],</span><br><span class="line">      \ &#x27;guru&#x27;:          [&#x27;golang.org/x/tools/cmd/guru&#x27;],</span><br><span class="line">      \ &#x27;impl&#x27;:          [&#x27;github.com/josharian/impl&#x27;],</span><br><span class="line">      \ &#x27;keyify&#x27;:        [&#x27;honnef.co/go/tools/cmd/keyify&#x27;],</span><br><span class="line">      \ &#x27;motion&#x27;:        [&#x27;github.com/fatih/motion&#x27;],</span><br><span class="line">      \ &#x27;iferr&#x27;:         [&#x27;github.com/koron/iferr&#x27;],</span><br><span class="line">\ &#125;</span><br></pre></td></tr></table></figure>
+
+<p>如注释所言，<code>:GoInstallBinaries</code>实际上是把这些二进制文件安装到本地，由于<code>golang.org</code>被墙了，所以相关工具无法下载。即使是github上的项目，克隆速度也慢得感人，所以还是手动下载安装。</p>
+<h3 id="3-1-手动安装二进制文件"><a href="#3-1-手动安装二进制文件" class="headerlink" title="3.1 手动安装二进制文件"></a>3.1 手动安装二进制文件</h3><p>以<code>fillstruct</code>为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">mkdir -p $GOPATH/src/github.com/davidrjenni</span><br><span class="line">cd $GOPATH/src/github.com/davidrjenni</span><br><span class="line">git clone https://github.com/davidrjenni/reftools.git </span><br><span class="line">cd reftools/cmd/fillstruct</span><br><span class="line">go install</span><br></pre></td></tr></table></figure>
+
+<p>注意<code>go.vim</code>中的<code>cmd/fillstruct</code>后缀指的是克隆的项目的子目录，因此流程是先克隆项目本身，再进入相应子目录安装。<code>go install</code>安装完后会发现<code>$GOPATH/bin</code>下多了二进制文件<code>fillstruct</code>。</p>
+<p>实际上上述流程是手动进行了<code>go get</code>的流程，但是能够判断出错到底是<code>git clone</code>还是<code>go install</code>，前者出错可能就是访问太慢甚至无法访问，后者则是可能项目里引用了未安装的包。</p>
+<h3 id="3-2-安装依赖包"><a href="#3-2-安装依赖包" class="headerlink" title="3.2 安装依赖包"></a>3.2 安装依赖包</h3><p>并非所有项目都像<code>fillstruct</code>那么顺利，比如在安装<code>errcheck</code>时就提示：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ go install</span><br><span class="line">internal/errcheck/errcheck.go:19:2: cannot find package &quot;golang.org/x/tools/go/packages&quot; in any of:</span><br><span class="line">    /home/xyz/local/go/src/golang.org/x/tools/go/packages (from $GOROOT)</span><br><span class="line">    /home/xyz/local/go/gopath/src/golang.org/x/tools/go/packages (from $GOPATH)</span><br></pre></td></tr></table></figure>
+
+<p>其中<code>/home/xyz</code>是我的HOME目录，出现这个错误就是因为<code>&quot;golang.org/x/tools/go/packages&quot;</code>包没有安装，而由于<code>golang.org</code>被墙了，<code>go get</code>安装会失败，不过好在可以从<a target="_blank" rel="noopener" href="https://github.com/golang">golang的github镜像站</a>去找到对应的项目，然后下载安装，以此为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">cd $GOPATH</span><br><span class="line">mkdir -p src/golang.org/x</span><br><span class="line">cd src/golang.org/x</span><br><span class="line">git clone https://github.com/golang/tools.git</span><br></pre></td></tr></table></figure>
+
+<p>然后再重新在<code>errcheck</code>目录下<code>go install</code>即可。</p>
+<h3 id="3-3-特别操作"><a href="#3-3-特别操作" class="headerlink" title="3.3 特别操作"></a>3.3 特别操作</h3><ol>
+<li><code>stamblerre/gocode</code>，由于生成的是<code>gocode-gomod</code>而非默认的<code>gocode</code>，因此需要指定二进制名称（似乎<code>go install</code>无法做到）：</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">go build -o gocode-gomod</span><br><span class="line">mv gocode-gomod $GOPATH/bin</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li><code>honnef.co/go/tools/cmd/keyify</code>，在github上有<a target="_blank" rel="noopener" href="https://github.com/dominikh/go-tools">镜像</a>：</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">cd $GOPATH/src</span><br><span class="line">mkdir -p honnef.co/go</span><br><span class="line">git clone https://github.com/dominikh/go-tools.git honnef.co/go/tools</span><br><span class="line">cd honnef.co/go/tools/cmd/keyify</span><br><span class="line">go install</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-4-最终安装结果"><a href="#3-4-最终安装结果" class="headerlink" title="3.4 最终安装结果"></a>3.4 最终安装结果</h3><p>安装的二进制文件如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ ls $GOBIN</span><br><span class="line">asmfmt    fillstruct    godef      golangci-lint  gomodifytags  gotags  impl</span><br><span class="line">dlv       gocode        gogetdoc   golint         gopls         guru    keyify</span><br><span class="line">errcheck  gocode-gomod  goimports  gometalinter   gorename      iferr   motion</span><br></pre></td></tr></table></figure>
+
+<p>从golang的github镜像上分别克隆了3个项目：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ls $GOPATH/src/golang.org/x</span><br><span class="line">lint  sync  tools</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-其他说明"><a href="#3-5-其他说明" class="headerlink" title="3.5 其他说明"></a>3.5 其他说明</h3><p>vim-go的具体使用方式，参考<a target="_blank" rel="noopener" href="https://github.com/fatih/vim-go/wiki/Tutorial">vim-go Tutorial</a>。</p>
+<p>打开go文件时会出现下列错误</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim-go: Features that rely on gopls will not work correctly in a null module.</span><br></pre></td></tr></table></figure>
+
+<p>解决方法参考<a target="_blank" rel="noopener" href="https://github.com/fatih/vim-go/issues/2301">#2301</a>，在<code>.vimrc</code>中添加下列代码即可：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">let g:go_null_module_warning = 0</span><br></pre></td></tr></table></figure>
+
+<p>此外<code>GoRename</code>命令只有在项目目录在<code>$GOPATH/src</code>下时才能使用，否则会出现<code>can&#39;t find package containing</code>错误。</p>
+<h2 id="4-总结"><a href="#4-总结" class="headerlink" title="4. 总结"></a>4. 总结</h2><p>由于是在之前的基础上进行，所以Go开发环境的搭建较为简单，安装Go、重新编译YCM，Ultisnip已经有了，剩下的就是vim-go的安装了。其实最重要的还是YCM的补全功能。</p>
+<p>虽然我vim-go用得也不多，主要就是用了下将gofmt集成进vim的<code>:GoFmt</code>命令，毕竟上手Go的时间也不长。话说才发现现在保存文件时就会自动格式化了，无需手动输入<code>:GoFmt</code>命令。</p>
+<p>安装vim-go的主要难点在于各种远程包，在我的电脑上几乎是全程开代理下载，有时候git代理不太好使就直接在VPS上克隆完毕后，打包、FTP下载、FTP上传、解压。</p>
+<p>之前实习时安装vim-go去解决各种<code>go get</code>的问题了，<code>go get</code>虽然方便，但是出错的话难以及时发现错误在哪，感觉在国内这个网络环境下，还不如手动克隆、安装。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag"># 搭环境</a>
+              <a href="/tags/vim/" rel="tag"># vim</a>
+              <a href="/tags/golang/" rel="tag"># golang</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/06/19/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-2-%E5%B8%B8%E7%94%A8%E7%9A%84vim%E6%8F%92%E4%BB%B6/" rel="prev" title="我的vim开发环境搭建(2): 常用的vim插件">
+      <i class="fa fa-chevron-left"></i> 我的vim开发环境搭建(2): 常用的vim插件
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/07/22/Linux-C-mktime%E8%BF%9B%E8%A1%8C%E6%97%B6%E9%97%B4%E8%BD%AC%E6%8D%A2%E7%9A%84%E9%99%B7%E9%98%B1/" rel="next" title="Linux C mktime进行时间转换的陷阱">
+      Linux C mktime进行时间转换的陷阱 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-Go%E7%9A%84%E5%AE%89%E8%A3%85"><span class="nav-number">1.</span> <span class="nav-text">1. Go的安装</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%87%8D%E6%96%B0%E7%BC%96%E8%AF%91YCM"><span class="nav-number">2.</span> <span class="nav-text">2. 重新编译YCM</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-vim-go"><span class="nav-number">3.</span> <span class="nav-text">3. vim-go</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-%E6%89%8B%E5%8A%A8%E5%AE%89%E8%A3%85%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%96%87%E4%BB%B6"><span class="nav-number">3.1.</span> <span class="nav-text">3.1 手动安装二进制文件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-2-%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96%E5%8C%85"><span class="nav-number">3.2.</span> <span class="nav-text">3.2 安装依赖包</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-3-%E7%89%B9%E5%88%AB%E6%93%8D%E4%BD%9C"><span class="nav-number">3.3.</span> <span class="nav-text">3.3 特别操作</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-4-%E6%9C%80%E7%BB%88%E5%AE%89%E8%A3%85%E7%BB%93%E6%9E%9C"><span class="nav-number">3.4.</span> <span class="nav-text">3.4 最终安装结果</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-5-%E5%85%B6%E4%BB%96%E8%AF%B4%E6%98%8E"><span class="nav-number">3.5.</span> <span class="nav-text">3.5 其他说明</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">4. 总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="0. 前言最近想包装pthread，像C++11线程库一样，毕竟标准库对于很多东西都没有包装，比如线程属性的设置。虽然可以用thread::native_handle_type()取得底层的pthread_t句柄，当然，本身就没想去麻烦地跨平台。主要目的还是出于学习，以及写个顺手的线程库。参考了知乎上的一篇回答：C++11是如何封装thread库的花了不少精力终于理解了整套流程，期间通过《C++">
+<meta property="og:type" content="article">
+<meta property="og:title" content="实现thread库细节：使用std::decay保存函数指针">
+<meta property="og:url" content="http://yoursite.com/2018/11/21/%E5%AE%9E%E7%8E%B0thread%E5%BA%93%E7%BB%86%E8%8A%82%EF%BC%9A%E4%BD%BF%E7%94%A8std-decay%E4%BF%9D%E5%AD%98%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="0. 前言最近想包装pthread，像C++11线程库一样，毕竟标准库对于很多东西都没有包装，比如线程属性的设置。虽然可以用thread::native_handle_type()取得底层的pthread_t句柄，当然，本身就没想去麻烦地跨平台。主要目的还是出于学习，以及写个顺手的线程库。参考了知乎上的一篇回答：C++11是如何封装thread库的花了不少精力终于理解了整套流程，期间通过《C++">
+<meta property="og:locale">
+<meta property="article:published_time" content="2018-11-21T08:45:21.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.233Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2018/11/21/%E5%AE%9E%E7%8E%B0thread%E5%BA%93%E7%BB%86%E8%8A%82%EF%BC%9A%E4%BD%BF%E7%94%A8std-decay%E4%BF%9D%E5%AD%98%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>实现thread库细节：使用std::decay保存函数指针 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/11/21/%E5%AE%9E%E7%8E%B0thread%E5%BA%93%E7%BB%86%E8%8A%82%EF%BC%9A%E4%BD%BF%E7%94%A8std-decay%E4%BF%9D%E5%AD%98%E5%87%BD%E6%95%B0%E6%8C%87%E9%92%88/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          实现thread库细节：使用std::decay保存函数指针
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-11-21 16:45:21" itemprop="dateCreated datePublished" datetime="2018-11-21T16:45:21+08:00">2018-11-21</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="0-前言"><a href="#0-前言" class="headerlink" title="0. 前言"></a>0. 前言</h2><p>最近想包装<code>pthread</code>，像C++11线程库一样，毕竟标准库对于很多东西都没有包装，比如线程属性的设置。虽然可以用<code>thread::native_handle_type()</code>取得底层的<code>pthread_t</code>句柄，当然，本身就没想去麻烦地跨平台。<br>主要目的还是出于学习，以及写个顺手的线程库。<br>参考了知乎上的一篇回答：<a target="_blank" rel="noopener" href="https://www.zhihu.com/question/30553807">C++11是如何封装thread库的</a><br>花了不少精力终于理解了整套流程，期间通过《C++ Primer》第16章复习了完美转发、可变模板参数(解包、包扩展)的知识，通过qicosmos前辈的博客<a target="_blank" rel="noopener" href="https://www.cnblogs.com/qicosmos/p/4325949.html">泛化之美–C++11可变模板参数的妙用</a>补充了一些知识。<br>在做了一些简单的测试后，便开始建立一个仓库实现我的想法。<br>但是自己实现过程中也遇到一些细节问题，毕竟回答也不可能太详细，比如这篇提到的<code>decay</code>。</p>
+<h2 id="1-decay类型退化"><a href="#1-decay类型退化" class="headerlink" title="1. decay类型退化"></a>1. <code>decay</code>类型退化</h2><p>C++ Primer中提到，在模板类型推导中，一般的类型转换是禁止的，否则无法准确推断是哪种类型。但是两种类型转换是允许的：</p>
+<ol>
+<li>将非<code>const</code>的引用或指针传递给<code>const</code>的引用或指针形参，比如<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">template &lt;typename T&gt; void f(const T&amp;);  // 函数模板声明</span><br><span class="line"></span><br><span class="line">int i = 0;</span><br><span class="line">int&amp; ri = i;</span><br><span class="line">f(ri);  // ri被转换成const int&amp;类型，因此T被推断为int</span><br></pre></td></tr></table></figure></li>
+<li>若形参不是引用类型，数组实参会被转换成指针形参，函数实参会被转换成函数指针形参，比如<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">template &lt;typename T&gt; void f(T param);</span><br><span class="line"></span><br><span class="line">void func();</span><br><span class="line">f(func);  // T被推断为void(*)()</span><br><span class="line"></span><br><span class="line">int a[10];</span><br><span class="line">f(a);     // T被推断为int*</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p><code>decay</code>完成的功能即将数组和函数转换成退化后的类型，对于其他类型，则是移除引用以及<code>const</code>和<code>volatile</code>描述符，分别对应上述的2和1。<br>注意，在模板类型推断中，实参的引用类型都会被忽略，就像上述1中的<code>const</code>被忽略一样。<br>比如传入<code>int&amp;</code>到形参<code>T t</code>中，推断方式是：先忽略<code>&amp;</code>，然后匹配<code>int</code>和<code>T</code>，因此T永远不会被推断为引用类型，除非形参是右值引用<code>T&amp;&amp; t</code>，根据引用折叠规则(<code>&amp;&amp; &amp;&amp;</code>折叠为<code>&amp;&amp;</code>，<code>&amp;&amp; &amp;</code>、<code>&amp; &amp;&amp;</code>、<code>&amp; &amp;</code>被折叠为<code>&amp;</code>)，才有可能推断<code>T</code>为引用，这也是C++11实现完美转发的基础。<br>从类型<code>T</code>到退化类型<code>typename std::decay&lt;T&gt;::type</code>的映射示例如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">int () =&gt; int (*)()</span><br><span class="line">int (&amp;)() =&gt; int (*)()</span><br><span class="line">int [10] =&gt; int*</span><br><span class="line">int (&amp;) [10] =&gt; int*</span><br><span class="line">int const =&gt; int</span><br><span class="line">int const&amp; =&gt; int</span><br><span class="line">int const* =&gt; int const*</span><br><span class="line">int* const =&gt; int*</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-使用可变模板参数构造线程函数的简单原理"><a href="#2-使用可变模板参数构造线程函数的简单原理" class="headerlink" title="2. 使用可变模板参数构造线程函数的简单原理"></a>2. 使用可变模板参数构造线程函数的简单原理</h2><p>C++11线程的构造函数是</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">template &lt;typename F, typename... Args&gt;</span><br><span class="line">explicit thread(F&amp;&amp;, Args&amp;&amp;...);</span><br></pre></td></tr></table></figure>
+<p>而底层线程接口是C风格的，一般需要将参数类型和<code>void*</code>进行转换，比如对于<code>pthread</code>线程函数，一般像这样使用</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">void* threadFunc(void* arg) &#123;</span><br><span class="line">  auto input = static_cast&lt;input_type*&gt;(arg);</span><br><span class="line">  // do sth... and generate an exit_code</span><br><span class="line">  return reinterpret_cast&lt;void*&gt;(exit_code);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>当然，返回值也可以是动态分配的对象的指针，但这就需要显式<code>pthread_join</code>，处理完返回类型后将该指针指向的资源回收。<br>实现C++11风格的线程函数的思路是：用<code>std::tuple&lt;Args...&gt;</code>(记为<code>TupleType</code>)将整个打包，然后动态申请一个<code>TupleType*</code>指针传入C风格线程函数。<br>由于线程函数是编译时期就决定的，无法像lambda表达式一样捕获外部参数，所以需要用虚函数实现：<br>C风格线程函数中将<code>void*</code>转换成<code>Base*</code>，而继承自<code>Base</code>类的<code>Derived</code>则实现可变模板参数的构造函数，将函数和输入参数打包，然后override基类的虚函数<code>void invoke()</code>，调用打包的函数。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">struct BaseData &#123;</span><br><span class="line">  virtual ~BaseData();</span><br><span class="line">  virtual void invoke();</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">template &lt;typename F, typename... Args&gt;</span><br><span class="line">struct DerivedData;  // 省略具体实现，内部包含一个tuple打包数据，实现了invoke函数调用函数</span><br><span class="line"></span><br><span class="line">void threadFunc(void* args) &#123;</span><br><span class="line">  auto p = static_cast&lt;BaseData*&gt;(args);</span><br><span class="line">  p-&gt;invoke();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">// 线程函数的实现</span><br><span class="line">template &lt;typename F, typename... Args&gt;</span><br><span class="line">void createThread(F&amp;&amp; f, Args&amp;&amp;... args) &#123;</span><br><span class="line">  auto data = new DerivedData(std::forward&lt;F&gt;(f), std::forward&lt;Args&gt;(args)...);</span><br><span class="line">  pthread_t tid;</span><br><span class="line">  int error = pthread_create(&amp;tid, nullptr, threadFunc, static_cast&lt;void*&gt;(data));</span><br><span class="line">  // handle error</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中有一些细节，比如如何在编译期确定<code>get&lt;i&gt;()</code>的<code>i</code>的范围，需要一点模板元的技巧，在C++17中<code>index_sequence</code>和<code>invoke</code>均已实现，C++11中也可以照着libstdc++源码自行实现。<br>另外为了线程安全，可以使用<code>std::unique_ptr</code>代替<code>new</code>，构造对象时使用<code>unique_ptr</code>，然后调用<code>release()</code>方法传递内部指针，再在线程函数中构造<code>unique_ptr</code>。<br>不过本文重点说的就是怎么打包。</p>
+<h2 id="3-打包退化类型的数据"><a href="#3-打包退化类型的数据" class="headerlink" title="3. 打包退化类型的数据"></a>3. 打包退化类型的数据</h2><p>看似打包数据应该使用完美转发，保留参数的<code>cv</code>修饰符以及引用类型，其实并不然，这点在本文链接的知乎回答中没有提及，毕竟是个细节，但是贴出的代码中都会发现，使用了<code>decay</code>。</p>
+<h3 id="3-1-result-of的使用"><a href="#3-1-result-of的使用" class="headerlink" title="3.1 result_of的使用"></a>3.1 <code>result_of</code>的使用</h3><p>对于底层C风格接口，返回的<code>void*</code>并不一定是实际你想返回的数据，因为线程函数往往只是完成一个任务，对主线程报告一个状态码。<br>但有时候也需要取得线程的计算结果，比如对一堆数据，分块并行求和，需要取得每个线程计算的结果，然后主线程将其相加。<br>C++11线程设施中，<code>thread</code>本身无法取得线程函数的返回值，需要结合<code>future</code>来完成，当然，在底层需要知道函数的返回类型，这里可以用<code>&lt;type_traits&gt;</code>中的<code>result_of</code>来实现。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">using F = int&amp; (*)(int, int);  // 函数指针</span><br><span class="line">using R = std::result_of(F(int, int))::type;  // int&amp;</span><br></pre></td></tr></table></figure>
+<p>但是<code>result_of</code>有个陷阱，比如把上述代码在实际中可能是这个样子</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">int&amp; f(int x, int y) &#123;</span><br><span class="line">  // ...</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">using F = decltype(f);</span><br><span class="line">using R = std::result_of&lt;F(int, int)&gt;::type;</span><br></pre></td></tr></table></figure>
+<p>然后编译就会出错</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">error:  type name’ declared as function returning a function</span><br></pre></td></tr></table></figure>
+<p>欲分析其原因，首先得对比函数和函数指针的类型表示：</p>
+<table>
+<thead>
+<tr>
+<th align="left">表示</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>F (Args...)</code></td>
+<td align="left">返回类型为<code>F</code>，输入参数为<code>Args...</code>的函数</td>
+</tr>
+<tr>
+<td align="left"><code>F (*)(Args...)</code></td>
+<td align="left">返回类型为<code>F</code>，输入参数为<code>Args...</code>的函数指针</td>
+</tr>
+<tr>
+<td align="left"><code>F (&amp;)(Args...)</code></td>
+<td align="left">返回类型为<code>F</code>，输入参数为<code>Args...</code>的函数引用</td>
+</tr>
+</tbody></table>
+<p>注意函数的表示类型不是<code>F()(Args...)</code>，中间的括号不需要，在指针和引用中加上这个括号只是为了区分是返回类型为<code>F</code>的函数指针&#x2F;引用还是返回类型为<code>F*</code>&#x2F;<code>F&amp;</code>的函数。<br>分析前面的代码，<code>F</code>即<code>decltype(f)</code>的类型是<code>int&amp; (int, int)</code>，那么<code>F(int, int)</code>即<code>int&amp; (int, int)(int, int)</code>，返回类型为<code>int&amp; (int, int)</code>，参数为<code>int, int</code>。<br>这里的返回类型是一个返回类型为<code>int&amp;</code>、参数为<code>int, int</code>的函数，而函数本身只有退化为指针才能作为返回值，导致编译出错。</p>
+<p>因此如果要将函数<code>f</code>和参数<code>args...</code>打包，如果完美转发<code>f</code>，那么可能保存的类型是函数而非函数指针、引用，导致调用<code>result_of</code>时编译出错。</p>
+<h2 id="3-2-能够被退化的类型本身无法进行拷贝"><a href="#3-2-能够被退化的类型本身无法进行拷贝" class="headerlink" title="3.2 能够被退化的类型本身无法进行拷贝"></a>3.2 能够被退化的类型本身无法进行拷贝</h2><p>其实使用<code>decay</code>来打包的根本原因并不是<code>result_of</code>，毕竟，完全可以在<code>invoke()</code>方法的实现中再去把函数类型转换成函数指针。<br>初学C语言时，无论是书籍还是老师都会讲到，数组不能拷贝</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">int a[2], b[2];</span><br><span class="line">a = b;  // 编译错误</span><br></pre></td></tr></table></figure>
+<p>正因为如此，传入形参时才将其退化成指向数组首地址的指针。而C语言中不存在这么复杂的类型推导以及引用类型，根本无需区分函数和函数指针，所以没有强调函数退化成函数指针这个例子。但是，函数和数组一样，都是无法拷贝的。<br>而引用类型，看似可以拷贝</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">int i, j;</span><br><span class="line">int &amp;ri = i, &amp;rj = j;</span><br><span class="line">ri = rj;  // 编译通过</span><br></pre></td></tr></table></figure>
+<p>实际拷贝的并不是引用本身，而是引用的对象之间进行拷贝。<br>那么，考虑数组进行打包，<code>tuple</code>的模板参数是无法设为不可拷贝的类型的，因此只能存为数组指针。<br>但是问题在于到底存放退化后的<code>int*</code>还是指向数组的指针<code>int (*)[N]</code>呢？参考如下代码</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">int a[3] = &#123;0, 1, 2&#125;;</span><br><span class="line">std::tuple&lt;int*&gt; t1(a);</span><br><span class="line">cout &lt;&lt; get&lt;0&gt;(t1)[2] &lt;&lt; endl;  // 2</span><br><span class="line">std::tuple&lt;int(*)[3]&gt; t2(&amp;a);</span><br><span class="line">cout &lt;&lt; get&lt;0&gt;(t2)[2] &lt;&lt; endl;  // 某个地址，比如0x7ffc462e1a98</span><br></pre></td></tr></table></figure>
+<p>只有退化类型才能表达出和原来传入实参一样的结果，就像完美转发一样。而另一种所谓的类型退化，即<code>int(*)[N]</code>，实际上已经改变了实参的意义。<br>引用类型<code>int(&amp;)[N]</code>能够和实参一样，但是问题是引用本身无法拷贝。<br>至于丢失的信息，比如数组丢失的长度信息，在函数调用中如果不是传入数组引用，本身就会丢失。既然参数转发前后都丢失了同样的信息，某种程度上也可以称为 <em>完美转发</em> 了。</p>
+<h2 id="3-3-打包数据的实现"><a href="#3-3-打包数据的实现" class="headerlink" title="3.3 打包数据的实现"></a>3.3 打包数据的实现</h2><p>类型退化可以看做是直接匹配，是很自然而然的操作，因此仅需把<code>tuple</code>模板参数声明为退化类型即可，传参时还是完美转发，实现如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">template &lt;typename T&gt;</span><br><span class="line">using decay_t = typename std::decay&lt;T&gt;::type;</span><br><span class="line"></span><br><span class="line">template &lt;typename F, typename... Args&gt;</span><br><span class="line">struct DataTuple &#123;</span><br><span class="line">  std::tuple&lt;decay_t&lt;F&gt;, decay_t&lt;Args&gt;...&gt; t_;</span><br><span class="line"></span><br><span class="line">  DataTuple(F&amp;&amp; f, Args&amp;&amp;... args)</span><br><span class="line">      : t_(std::forward&lt;F&gt;(f), std::forward&lt;Args&gt;(args)...) &#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">template &lt;typename F, typename... Args&gt;</span><br><span class="line">DataTuple&lt;F, Args...&gt;* makeDataTuple(F&amp;&amp; f, Args&amp;&amp;... args) &#123;</span><br><span class="line">  return new DataTuple&lt;F, Args...&gt;(std::forward&lt;F&gt;(f),</span><br><span class="line">                                   std::forward&lt;Args&gt;(args)...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>到这里，其实还有个关键问题，那就是，既然引用类型会丢失，那么传入引用类型的话，不就无法转发了吗？C++11线程库也考虑到了这点，因此使用了<code>ref</code>来对引用类型进行包装，这里给出一个机遇我们的<code>DataTuple</code>的示例</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">void f(int&amp; x) &#123; x++; &#125;</span><br><span class="line"></span><br><span class="line">int main() &#123;</span><br><span class="line">  int i = 0;</span><br><span class="line">  int&amp; ri = i;</span><br><span class="line">  auto p = makeDataTuple(f, std::ref(ri));</span><br><span class="line">  get&lt;0&gt;(p-&gt;t_)(get&lt;1&gt;(p-&gt;t_));</span><br><span class="line">  cout &lt;&lt; i &lt;&lt; endl;  // 1</span><br><span class="line">  // delete p and exit.</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输出结果和注释一样，是1，说明引用成功传递了，其实内部实现是一个<code>reference_wrapper&lt;T&gt;</code>，其内部保存一个<code>T*</code>，从而使得<code>ref(ri)</code>具有值语义。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/11/06/gdb%E8%B0%83%E8%AF%95%E7%B1%BB%E6%A8%A1%E6%9D%BF%E6%88%90%E5%91%98%E5%87%BD%E6%95%B0/" rel="prev" title="gdb调试类模板成员函数">
+      <i class="fa fa-chevron-left"></i> gdb调试类模板成员函数
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2018/12/23/lambda%E6%8D%95%E8%8E%B7this%E6%8C%87%E9%92%88/" rel="next" title="lambda捕获this指针">
+      lambda捕获this指针 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#0-%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">0. 前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-decay%E7%B1%BB%E5%9E%8B%E9%80%80%E5%8C%96"><span class="nav-number">2.</span> <span class="nav-text">1. decay类型退化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%BD%BF%E7%94%A8%E5%8F%AF%E5%8F%98%E6%A8%A1%E6%9D%BF%E5%8F%82%E6%95%B0%E6%9E%84%E9%80%A0%E7%BA%BF%E7%A8%8B%E5%87%BD%E6%95%B0%E7%9A%84%E7%AE%80%E5%8D%95%E5%8E%9F%E7%90%86"><span class="nav-number">3.</span> <span class="nav-text">2. 使用可变模板参数构造线程函数的简单原理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%89%93%E5%8C%85%E9%80%80%E5%8C%96%E7%B1%BB%E5%9E%8B%E7%9A%84%E6%95%B0%E6%8D%AE"><span class="nav-number">4.</span> <span class="nav-text">3. 打包退化类型的数据</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-result-of%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="nav-number">4.1.</span> <span class="nav-text">3.1 result_of的使用</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-2-%E8%83%BD%E5%A4%9F%E8%A2%AB%E9%80%80%E5%8C%96%E7%9A%84%E7%B1%BB%E5%9E%8B%E6%9C%AC%E8%BA%AB%E6%97%A0%E6%B3%95%E8%BF%9B%E8%A1%8C%E6%8B%B7%E8%B4%9D"><span class="nav-number">5.</span> <span class="nav-text">3.2 能够被退化的类型本身无法进行拷贝</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-3-%E6%89%93%E5%8C%85%E6%95%B0%E6%8D%AE%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="nav-number">6.</span> <span class="nav-text">3.3 打包数据的实现</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

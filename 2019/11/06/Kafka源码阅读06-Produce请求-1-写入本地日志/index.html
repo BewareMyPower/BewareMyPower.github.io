@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="回顾前一节介绍了Message的格式及其实现，本来是继续阅读MessageSet，但后来发现在Kafka 0.11.0之后Message和MessageSet（消息集）发生了较大改变，详细参考Kafka Protocol - Messagesets，实际和生产者消费者交互的是RecordBatch而非MessageSet，原来的MessageSet只是简单地在若干Message之前加入offset">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读06: Produce请求(1): 写入本地日志">
+<meta property="og:url" content="http://yoursite.com/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="回顾前一节介绍了Message的格式及其实现，本来是继续阅读MessageSet，但后来发现在Kafka 0.11.0之后Message和MessageSet（消息集）发生了较大改变，详细参考Kafka Protocol - Messagesets，实际和生产者消费者交互的是RecordBatch而非MessageSet，原来的MessageSet只是简单地在若干Message之前加入offset">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-11-06T10:43:19.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.221Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读06: Produce请求(1): 写入本地日志 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读06: Produce请求(1): 写入本地日志
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-11-06 18:43:19" itemprop="dateCreated datePublished" datetime="2019-11-06T18:43:19+08:00">2019-11-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h2><p>前一节介绍了<code>Message</code>的格式及其实现，本来是继续阅读<code>MessageSet</code>，但后来发现在Kafka 0.11.0之后<code>Message</code>和<code>MessageSet</code>（消息集）发生了较大改变，详细参考<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">Kafka Protocol - Messagesets</a>，实际和生产者消费者交互的是<code>RecordBatch</code>而非<code>MessageSet</code>，原来的<code>MessageSet</code>只是简单地在若干<code>Message</code>之前加入offset字段和消息数量字段，现在的<code>RecordBatch</code>多了不少字段，比如<code>ProducerId</code>&#x2F;<code>ProducerEpoch</code>等。目前脱离了对API协议的实际处理过程去看这些数据结构的实现很难明白其实际意义，因此先阅读API请求。</p>
+<p>本文就先阅读生产者的请求，其类型为<strong>Produce</strong>，对应<code>KafkaApis.handle()</code>中的下列分支：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="type">ApiKeys</span>.<span class="type">PRODUCE</span> =&gt; handleProduceRequest(request)</span><br></pre></td></tr></table></figure>
+
+<h2 id="Produce协议"><a href="#Produce协议" class="headerlink" title="Produce协议"></a>Produce协议</h2><p>本节参考<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ProduceAPI">Produce API</a>。Produce API使用通用的消息集格式，由于在发送时无法确定消息的offset，因此生产者可以随意填充该字段。</p>
+<h3 id="请求格式"><a href="#请求格式" class="headerlink" title="请求格式"></a>请求格式</h3><p>Kafka 1.1使用的Produce请求是v2（实际上和v0及v1相同）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ProduceRequest =&gt; RequiredAcks Timeout [TopicName [Partition MessageSetSize MessageSet]]</span><br><span class="line">  RequiredAcks =&gt; int16</span><br><span class="line">  Timeout =&gt; int32</span><br><span class="line">  Partition =&gt; int32</span><br><span class="line">  MessageSetSize =&gt; int32</span><br></pre></td></tr></table></figure>
+
+<p>这种描述格式是Kafka wiki的标准请求格式，<code>field =&gt; type</code>代表字段<code>field</code>是<code>type</code>类型，<code>field =&gt; [type]</code>代表<code>field</code>字段包含若干个<code>type</code>类型，也就是<code>[]</code>代表数组。</p>
+<p>因此这里的消息请求的格式，可以看作包含1个2字节整型<code>RequiredAcks</code>，1个4字节整型<code>Timeout</code>，接下来是N个结构，每个结构都有1个<code>TopicName</code>，以及若干个子结构，每个子结构由1个<code>Partition</code>&#x2F;<code>MessageSetSize</code>&#x2F;<code>MessageSet</code>组成。</p>
+<p>然后介绍官方对上述参数的定义：</p>
+<ul>
+<li><p><code>RequiredAcks</code>（下文简称acks）</p>
+<p>指定服务端在响应请求之前应该受到多少确认（ack）:</p>
+<ul>
+<li>0：服务器不发送任何响应（这是服务器不回复请求的唯一情况）；</li>
+<li>1：服务器在等待数据写入本地日志后才会发送响应；</li>
+<li>-1：服务器在等待所有同步副本提交消息之后才发送响应。</li>
+</ul>
+<p>0和1很好理解，0就是生产者发完就不管了，1就是等待消息被写入本地日志之后再返回，这里涉及到<strong>同步副本（isr，in-sync replicas）</strong>这个概念。这里简单介绍下。用Kafka自带脚本创建topic时会指定<code>--replication-factor</code>，也就是消息日志的复制数量，此时会创建多个<strong>副本（replicas）</strong>来保存消息日志，在<strong>Leader</strong>写入消息日志到本地时，副本也会从Leader取得消息，写入到自己的消息日志。暂且不提其同步过程，可以认为目前存活且消息写入跟上Leader的副本就是同步副本。</p>
+</li>
+<li><p><code>Timeout</code></p>
+<p>服务器可以等待<code>RequiredAcks</code>指定数量的确认所用的最长时间，单位：ms。这个参数并不是请求时间的确切限制，因为：</p>
+<ol>
+<li>网络传输延迟不包含在内；</li>
+<li>计时器在处理请求时才开始，因此如果很多请求正在排队等待处理，那么这个等待时间不包含在内；</li>
+<li>我们不会终止本地写操作，因此如果本地写入时间超时，将不予考虑，要获得这种类型的超时，客户端应该使用socket的超时。</li>
+</ol>
+</li>
+<li><p><code>TopicName</code>：发布数据的目标主题；</p>
+</li>
+<li><p><code>Partition</code>：发布数据的目标分区；</p>
+</li>
+<li><p><code>MessageSetSize</code>：紧接着的<code>MessageSet</code>字段的字节数；</p>
+</li>
+<li><p><code>MessageSet</code>：消息集的标准格式，参考<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">Protocol - Messagesets</a>，注意Kafka 1.1使用的是v2版本的RecordBatch。</p>
+</li>
+</ul>
+<h3 id="响应格式"><a href="#响应格式" class="headerlink" title="响应格式"></a>响应格式</h3><p>Kafka 1.1使用的是0.10.0后支持的v2版本，因此v0版本和0.9.0后支持的v1版本就先无视了。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">ProduceResponse =&gt; [TopicName [Partition ErrorCode Offset Timestamp]] ThrottleTime</span><br><span class="line">  TopicName =&gt; string</span><br><span class="line">  Partition =&gt; int32</span><br><span class="line">  ErrorCode =&gt; int16</span><br><span class="line">  Offset =&gt; int64</span><br><span class="line">  Timestamp =&gt; int64</span><br><span class="line">  ThrottleTime =&gt; int32</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p><code>Topic</code>：响应对应的主题；</p>
+</li>
+<li><p><code>Partition</code>：响应对应的分区；</p>
+</li>
+<li><p><code>ErrorCode</code>：当前分区的错误码；</p>
+<p>错误码是基于分区的，因为指定分区可能不可用或者无法在其他主机上维护而其他分区可能成功接受了Produce请求；</p>
+</li>
+<li><p><code>Offset</code>：赋值给消息集中第1条消息的offset；</p>
+</li>
+<li><p><code>Timestamp</code>：从UTC epoch至今的毫秒数，根据时间戳类型有不同的设定：</p>
+<ul>
+<li>时间戳类型为<code>LogAppendTime</code>，则为broker赋值给该消息集的时间戳，消息集内的所有内部消息都拥有同一个时间戳；</li>
+<li>时间戳类型为<code>CreateTime</code>，则该字段总是-1。</li>
+</ul>
+<p>如果没有错误码返回，那么生产者可以认为Produce请求的时间戳已被broker接受。</p>
+</li>
+<li><p><code>ThrottleTime</code>：由于超过了quota（限额）而导致请求被限流的时间间隔，单位：毫秒。</p>
+</li>
+</ul>
+<h2 id="handleProduceRequest"><a href="#handleProduceRequest" class="headerlink" title="handleProduceRequest"></a>handleProduceRequest</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">handleProduceRequest</span></span>(request: <span class="type">RequestChannel</span>.<span class="type">Request</span>) &#123;</span><br><span class="line">  <span class="comment">// 将 ByteBuffer 类型的请求解析成 ProduceRequest 类型</span></span><br><span class="line">  <span class="keyword">val</span> produceRequest = request.body[<span class="type">ProduceRequest</span>]</span><br><span class="line">  <span class="comment">// 取得请求的总字节数, 包含 header 和 body</span></span><br><span class="line">  <span class="keyword">val</span> numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中<code>header</code>和<code>sizeofBodyInBytes</code>在<code>network.RequestChannel</code>类中定义</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Request</span>(<span class="params">/* ... */</span></span></span><br><span class="line"><span class="params"><span class="class">              val context: <span class="type">RequestContext</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">              /* ... */</span></span></span><br><span class="line"><span class="params"><span class="class">              @volatile private var buffer: <span class="type">ByteBuffer</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">              /* ... */</span>) <span class="keyword">extends</span> <span class="title">BaseRequest</span> </span>&#123;</span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> bodyAndSize: <span class="type">RequestAndSize</span> = context.parseRequest(buffer)</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">header</span></span>: <span class="type">RequestHeader</span> = context.header</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">sizeOfBodyInBytes</span></span>: <span class="type">Int</span> = bodyAndSize.size</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>请求头之前在<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/09/23/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB03-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BRequestChannel/">网络层阅读之RequestChannel</a>中提过，这里简单回顾下。<code>RequestHeader</code>为Java类，定义在<code>org.apache.kafka.common.requests</code>包中，包含以下字段</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ApiKeys apiKey;    <span class="comment">// 请求类型</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="type">short</span> apiVersion;  <span class="comment">// API版本</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> String clientId;   <span class="comment">// 用户指定的客户端ID</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="type">int</span> correlationId; <span class="comment">// 用户提供的整数值，将和响应一起返回</span></span><br></pre></td></tr></table></figure>
+
+<p>对应<a target="_blank" rel="noopener" href="https://kafka.apache.org/protocol.html#protocol_messages">消息协议</a>的Headers：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Request Header =&gt; api_key api_version correlation_id client_id </span><br><span class="line">  api_key =&gt; INT16</span><br><span class="line">  api_version =&gt; INT16</span><br><span class="line">  correlation_id =&gt; INT32</span><br><span class="line">  client_id =&gt; NULLABLE_STRING</span><br></pre></td></tr></table></figure>
+
+<p>在<code>Processor</code>处理客户端的请求字节序列时，会调用<code>RequestHeader.parse</code>方法构造请求头，然后和字节序列<code>buffer</code>一起发送给<code>RequestChannel</code>，<code>Handler</code>线程从中取得请求发送给<code>KafkaApis</code>处理。</p>
+<p>后面是一些认证相关的代码，调用了<code>authorize</code>方法，由于不影响主要流程，所以暂且跳过，最后会进入以下分支：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> internalTopicsAllowed = request.header.clientId == <span class="type">AdminUtils</span>.<span class="type">AdminClientId</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// call the replica manager to append messages to the replicas</span></span><br><span class="line"><span class="comment">// 传入replicaManager来添加消息到副本上</span></span><br><span class="line">replicaManager.appendRecords(</span><br><span class="line">  timeout = produceRequest.timeout.toLong, <span class="comment">// Produce请求的timeout字段</span></span><br><span class="line">  requiredAcks = produceRequest.acks, <span class="comment">// Produce请求的acks字段</span></span><br><span class="line">  internalTopicsAllowed = internalTopicsAllowed, <span class="comment">// client id是否为__admin_client</span></span><br><span class="line">  isFromClient = <span class="literal">true</span>, <span class="comment">// 这里是处理客户端的Produce请求，所以为true</span></span><br><span class="line">  entriesPerPartition = authorizedRequestInfo, <span class="comment">// 通过认证的请求信息</span></span><br><span class="line">  responseCallback = sendResponseCallback, <span class="comment">// 发送响应的回调函数</span></span><br><span class="line">  processingStatsCallback = processingStatsCallback) <span class="comment">// 处理stats的回调函数</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;</span></span><br><span class="line"><span class="comment">// hence we clear its data here in order to let GC reclaim its memory since it is already appended to log</span></span><br><span class="line">produceRequest.clearPartitionRecords() <span class="comment">// 简单将Produce请求的partitionRecords置为null</span></span><br></pre></td></tr></table></figure>
+
+<p>留意最后的操作，提到了<strong>purgatory</strong>这个概念：如果请求被放入purgatory，那么就会被（purgatory）持有引用，因此将其置为<code>null</code>防止被垃圾收集。也是之后涉及再看。</p>
+<p>其中，<code>entriesPerPartition</code>是之前认证过程得到的信息：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> authorizedRequestInfo = mutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">MemoryRecords</span>]()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 从 produceRequest.partitionRecords 取得所有 TopicPartiton 和 MemoryRecords</span></span><br><span class="line"><span class="comment">// ***OrFail 方法仅仅检查 partitionRecords 字段是否为 null, 若为 null 则抛出异常</span></span><br><span class="line"><span class="keyword">for</span> ((topicPartition, memoryRecords) &lt;- produceRequest.partitionRecordsOrFail.asScala) &#123;</span><br><span class="line">  <span class="keyword">if</span> (!authorize(request.session, <span class="type">Write</span>, <span class="keyword">new</span> <span class="type">Resource</span>(<span class="type">Topic</span>, topicPartition.topic)))</span><br><span class="line">    unauthorizedTopicResponses += topicPartition -&gt; <span class="keyword">new</span> <span class="type">PartitionResponse</span>(<span class="type">Errors</span>.<span class="type">TOPIC_AUTHORIZATION_FAILED</span>)</span><br><span class="line">  <span class="keyword">else</span> <span class="keyword">if</span> (!metadataCache.contains(topicPartition.topic))</span><br><span class="line">    nonExistingTopicResponses += topicPartition -&gt; <span class="keyword">new</span> <span class="type">PartitionResponse</span>(<span class="type">Errors</span>.<span class="type">UNKNOWN_TOPIC_OR_PARTITION</span>)</span><br><span class="line">  <span class="keyword">else</span> <span class="comment">// 通过了 authorize 方法认证, 并且 metadataCache 包含该 topic</span></span><br><span class="line">    authorizedRequestInfo += (topicPartition -&gt; memoryRecords)</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="Idea调试"><a href="#Idea调试" class="headerlink" title="Idea调试"></a>Idea调试</h3><p>追根刨底去看<code>metadataCache</code>的构造和读取略麻烦，而且偏离了我们这篇文章的核心目的（了解Kafka怎么处理Produce请求）这里就利用Intellij Idea调试先看看里面到底是什么，也是阅读源码以来第1次调试。</p>
+<p>首先<code>zkServer</code>命令启动Zookeeper服务端，然后在Idea中在定义<code>authorizedRequestInfo</code>处设断点，调试模式启动Kafka的core模块（即Kafka服务端），然后启动Kafka客户端，向<code>test</code>主题发送字符串<code>hello</code>，此时可以看到<code>metadataCache</code>的结构：</p>
+<ul>
+<li><code>brokerId</code> &#x3D; 0</li>
+<li><code>cache</code> &#x3D; “HashMap” size &#x3D; 2<ul>
+<li>0 &#x3D; …<ul>
+<li>_1 &#x3D; “__consumer_offsets”<ul>
+<li><code>value</code> &#x3D; {char[18]@5303}</li>
+<li><code>hash</code> &#x3D; -970371369</li>
+</ul>
+</li>
+<li>_2 &#x3D; “HashMap” size &#x3D; 50</li>
+</ul>
+</li>
+<li>1 &#x3D; …<ul>
+<li>_1 &#x3D; “test”<ul>
+<li><code>value</code> &#x3D; {char[4]@5410}</li>
+<li><code>hash</code> &#x3D; 3556498</li>
+</ul>
+</li>
+<li>_2 &#x3D; “HashMap” size &#x3D; 1</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>可见其<code>cache</code>字段为<code>HashMap</code>类型，包含了所有的topic，一个是我们创建的<code>test</code>主题，一个是用来管理消费者提交的offset的<code>__consumer_offsets</code>。</p>
+<p>因此保证了<code>authorizedRequestInfo</code>，也就是传入<code>appendRecords</code>的<code>entriesPerPartition</code>参数，它的topic都是目前现有的。</p>
+<h2 id="ReplicaManager-appendRecords"><a href="#ReplicaManager-appendRecords" class="headerlink" title="ReplicaManager.appendRecords"></a>ReplicaManager.appendRecords</h2><blockquote>
+<p>将消息添加到分区的首领副本，等待它们被复制到其他副本。无论是timeout或者acks的条件被满足，都会触发回调函数。如果回调函数本身已经在某个对象上被同步，那么传递这个对象来避免死锁。</p>
+</blockquote>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">appendRecords</span></span>(timeout: <span class="type">Long</span>,</span><br><span class="line">                  requiredAcks: <span class="type">Short</span>,</span><br><span class="line">                  internalTopicsAllowed: <span class="type">Boolean</span>,</span><br><span class="line">                  isFromClient: <span class="type">Boolean</span>,</span><br><span class="line">                  entriesPerPartition: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">MemoryRecords</span>],</span><br><span class="line">                  responseCallback: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">PartitionResponse</span>] =&gt; <span class="type">Unit</span>,</span><br><span class="line">                  delayedProduceLock: <span class="type">Option</span>[<span class="type">Lock</span>] = <span class="type">None</span>,</span><br><span class="line">                  processingStatsCallback: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">RecordsProcessingStats</span>] =&gt; <span class="type">Unit</span> = _ =&gt; ()) &#123;</span><br><span class="line">  <span class="keyword">if</span> (isValidRequiredAcks(requiredAcks)) &#123; <span class="comment">// acks只能为-1，0，1</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// acks 在可接受的范围外, 则客户端肯定出错了, 仅仅返回错误, 而不用处理请求</span></span><br><span class="line">    <span class="comment">// 具体处理: 对每个 TopicPartition 对象, 构造相应的 PartitionResponse 对象组成新的 Map</span></span><br><span class="line">    <span class="comment">//  其中包含 error, baseOffset, logAppendTime, logStartOffset 等字段,</span></span><br><span class="line">    <span class="comment">//  除了 error 字段标明为 acks不合法 外, 其余字段都随意设置</span></span><br><span class="line">    <span class="keyword">val</span> responseStatus = entriesPerPartition.map &#123; <span class="keyword">case</span> (topicPartition, _) =&gt;</span><br><span class="line">      topicPartition -&gt; <span class="keyword">new</span> <span class="type">PartitionResponse</span>(<span class="type">Errors</span>.<span class="type">INVALID_REQUIRED_ACKS</span>,</span><br><span class="line">        <span class="type">LogAppendInfo</span>.<span class="type">UnknownLogAppendInfo</span>.firstOffset, <span class="type">RecordBatch</span>.<span class="type">NO_TIMESTAMP</span>, <span class="type">LogAppendInfo</span>.<span class="type">UnknownLogAppendInfo</span>.logStartOffset)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 调用传入的回调 responseCallback 将返回值发送回去</span></span><br><span class="line">    responseCallback(responseStatus)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>先看else分支，可以得知，传入的<code>entriesPerPartition</code>为<code>TopicPartition</code>到<code>MemoryRecords</code>（消息）的<code>Map</code>而传入的<code>responseCallback</code>为发送响应给客户端的回调函数，响应类型也是<code>Map</code>，key也是<code>TopicPartition</code>，只不过value变成了<code>PartitionResponse</code>。也就是说，无论是请求还是响应，都是以分区为单位的，对于错误的响应，只有<code>error</code>字段起作用，而正确的响应是包含<code>baseOffset</code>，<code>logAppendTime</code>和<code>logStartOffset</code>等字段，前2个字段在上一篇<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/10/14/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB05-%E6%B6%88%E6%81%AF%E5%8D%8F%E8%AE%AE%E9%98%85%E8%AF%BB%E4%B9%8BMessage/">消息协议阅读</a>中简单提过，分别是消息日志中第1个offset以及发送的消息被写入消息日志的时间戳，现在具体阅读acks合法时的处理流程。</p>
+<h3 id="time字段"><a href="#time字段" class="headerlink" title="time字段"></a>time字段</h3><p>首先取得毫秒级的<code>time</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> sTime = time.milliseconds</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>其中<code>time</code>为<code>replicaManager</code>的构造参数，而<code>replicaManager</code>也是<code>KafkaApis</code>的构造参数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ReplicaManager</span>(<span class="params">val config: <span class="type">KafkaConfig</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                     metrics: <span class="type">Metrics</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                     time: <span class="type">Time</span>,</span></span></span><br><span class="line"><span class="params"><span class="class"></span></span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">KafkaApis</span>(<span class="params">val requestChannel: <span class="type">RequestChannel</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                val replicaManager: <span class="type">ReplicaManager</span>,</span></span></span><br><span class="line"><span class="params"><span class="class"></span></span></span><br></pre></td></tr></table></figure>
+
+<p><code>KafkaApis</code>对象是在<code>KafkaServer</code>的<code>startup</code>方法中创建的，层层追溯如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">apis = <span class="keyword">new</span> <span class="type">KafkaApis</span>(socketServer.requestChannel, replicaManager, <span class="comment">/* ... */</span>)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">replicaManager = createReplicaManager(isShuttingDown)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">createReplicaManager</span></span>(isShuttingDown: <span class="type">AtomicBoolean</span>): <span class="type">ReplicaManager</span> =</span><br><span class="line">  <span class="keyword">new</span> <span class="type">ReplicaManager</span>(config, metrics, time, <span class="comment">/* ... */</span>)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">KafkaServer</span>(<span class="params">val config: <span class="type">KafkaConfig</span>, time: <span class="type">Time</span> = <span class="type">Time</span>.<span class="type">SYSTEM</span>,</span></span></span><br><span class="line"><span class="params"><span class="class"></span></span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">Time</span> &#123;</span><br><span class="line">    <span class="type">Time</span> <span class="variable">SYSTEM</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SystemTime</span>();</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>可见<code>time</code>的<code>SystemTime</code>对象，作为计时器，包含以下常用方法：</p>
+<ul>
+<li><code>milliseconds</code>：取得毫秒级时间戳；</li>
+<li><code>nanoseconds</code>：取得纳秒级时间戳；</li>
+<li><code>sleep(long ms)</code>：当前线程休眠指定毫秒数。</li>
+</ul>
+<p>因此Kafka中一切用到计时器的类都会使用该对象，回过头看<code>appendRecords</code>代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> sTime = time.milliseconds <span class="comment">// 取得当前毫秒级时间戳</span></span><br><span class="line"><span class="keyword">val</span> localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,</span><br><span class="line">  isFromClient = isFromClient, entriesPerPartition, requiredAcks)</span><br><span class="line"><span class="comment">// 调试信息: 再次取得时间戳, 相减得到 appendToLocalLog 的用时</span></span><br><span class="line">debug(<span class="string">&quot;Produce to local log in %d ms&quot;</span>.format(time.milliseconds - sTime))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>也就是说首先会调用<code>appendToLocalLog</code>方法</p>
+<h3 id="appendToLocalLog"><a href="#appendToLocalLog" class="headerlink" title="appendToLocalLog"></a>appendToLocalLog</h3><blockquote>
+<p>将消息添加到本地副本日志中</p>
+</blockquote>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">appendToLocalLog</span></span>(internalTopicsAllowed: <span class="type">Boolean</span>,</span><br><span class="line">                             isFromClient: <span class="type">Boolean</span>,</span><br><span class="line">                             entriesPerPartition: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">MemoryRecords</span>],</span><br><span class="line">                             requiredAcks: <span class="type">Short</span>): <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">LogAppendResult</span>] = &#123;</span><br><span class="line">  trace(<span class="string">s&quot;Append [<span class="subst">$entriesPerPartition</span>] to local log&quot;</span>)</span><br><span class="line">  <span class="comment">// 遍历所有客户端请求写入的 topicPartition 以及对应消息 records</span></span><br><span class="line">  entriesPerPartition.map &#123; <span class="keyword">case</span> (topicPartition, records) =&gt;</span><br><span class="line">    <span class="comment">// 更新topicStats，暂时略去不看</span></span><br><span class="line">    brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()</span><br><span class="line">    brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()</span><br><span class="line">    <span class="keyword">if</span> (<span class="type">Topic</span>.isInternal(topicPartition.topic) &amp;&amp; !internalTopicsAllowed) &#123;</span><br><span class="line">      <span class="comment">// topic是内部主题: __consumer_offsets 或 __transaction_state, 且 internalTopicsAllowed 为 false</span></span><br><span class="line">      <span class="comment">//  (在 KafkaApis.handleProduceRequest 中, 只有请求的 clientId 为 AdminClientId 时才为 true)</span></span><br><span class="line">      <span class="comment">// 也就是如果不是 Admin 客户端, 尝试写入内部主题则会返回 写入不合法 的 LogAppendResult</span></span><br><span class="line">      (topicPartition, <span class="type">LogAppendResult</span>(</span><br><span class="line">        <span class="type">LogAppendInfo</span>.<span class="type">UnknownLogAppendInfo</span>,</span><br><span class="line">        <span class="type">Some</span>(<span class="keyword">new</span> <span class="type">InvalidTopicException</span>(<span class="string">s&quot;Cannot append to internal topic <span class="subst">$&#123;topicPartition.topic&#125;</span>&quot;</span>))))</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123; <span class="comment">// 非内部主题, 可以写入</span></span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">      &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">        <span class="comment">// 异常处理(略)，会将处理客户端请求的异常信息写入返回结果中</span></span><br><span class="line">        <span class="comment">// 注意，对于用于流程控制的Throwable异常，会单独处理，这里后面再看</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>首先是区分了消费主题是否为内部主题，比如<code>__consumer_offsets</code>，这种主题并不是存储生产&#x2F;消费的消息的，因此只允许Admin客户端读写。至于<code>brokerTopicStats</code>也是度量指标相关的，暂且略过。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 从内部的 allPartitions 中找到 topicPartition, PS: allPartitions 是从本地消息日志中读取的</span></span><br><span class="line"><span class="keyword">val</span> partitionOpt = getPartition(topicPartition)</span><br><span class="line"><span class="keyword">val</span> info = partitionOpt <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Some</span>(partition) =&gt;</span><br><span class="line">    <span class="comment">// 找到的是 OfflinePartition (当前broker不在分区的ISR列表上) 则会(通过异常处理)返回错误信息</span></span><br><span class="line">    <span class="comment">// https://issues.apache.org/jira/browse/KAFKA-6796 在 Kafka 2.0 中对这种行为进行了修复</span></span><br><span class="line">    <span class="comment">// 比如在分区重分配期间, 客户的Produce请求在本地副本被删除后到达, 此时不应该返回分区不存在的错误</span></span><br><span class="line">    <span class="comment">// 因此2.0中抛出的是 NotLeaderForPartitionException, 会强制让客户端更新元数据来找到新的分区位置</span></span><br><span class="line">    <span class="keyword">if</span> (partition eq <span class="type">ReplicaManager</span>.<span class="type">OfflinePartition</span>)</span><br><span class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">KafkaStorageException</span>(<span class="string">s&quot;Partition <span class="subst">$topicPartition</span> is in an offline log directory on broker <span class="subst">$localBrokerId</span>&quot;</span>)</span><br><span class="line">    <span class="comment">// 添加记录到leader副本上</span></span><br><span class="line">    partition.appendRecordsToLeader(records, isFromClient, requiredAcks)</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 若找不到目标 topicPartition, 则代表生产者向一个未知的分区生产消息, 返回表示分区不存在的结果</span></span><br><span class="line">  <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">UnknownTopicOrPartitionException</span>(<span class="string">&quot;Partition %s doesn&#x27;t exist on %d&quot;</span></span><br><span class="line">    .format(topicPartition, localBrokerId))</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 略去更新brokerTopicStats的代码</span></span><br><span class="line"></span><br><span class="line">(topicPartition, <span class="type">LogAppendResult</span>(info))</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>处理了2种错误：分区是离线的（Offline）和分区是未知，而对于已知分区，则是将<code>appendRecordsToLeader</code>方法返回的<code>info</code>来构造该分区对应的<code>LogAppendResult</code>作为返回结果。</p>
+<p>这里通过<code>getPartition</code>返回的<code>partition</code>类型是<code>Partition</code>，位于<code>cluster</code>包中：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Partition</span>(<span class="params">val topic: <span class="type">String</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                val partitionId: <span class="type">Int</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                time: <span class="type">Time</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                replicaManager: <span class="type">ReplicaManager</span>,</span></span></span><br><span class="line"><span class="params"><span class="class">                val isOffline: <span class="type">Boolean</span> = false</span>)</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>除了主题名<code>topic</code>和分区号<code>partitionId</code>外，还会引用<code>replicaManager</code>用于将信息写入副本中。还通过<code>isOffline</code>来区分分区是否在副本broker上。</p>
+<h3 id="Partition-appendRecordsToLeader"><a href="#Partition-appendRecordsToLeader" class="headerlink" title="Partition.appendRecordsToLeader"></a>Partition.appendRecordsToLeader</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">appendRecordsToLeader</span></span>(records: <span class="type">MemoryRecords</span>, isFromClient: <span class="type">Boolean</span>, requiredAcks: <span class="type">Int</span> = <span class="number">0</span>): <span class="type">LogAppendInfo</span> = &#123;</span><br><span class="line">  <span class="comment">// 用读锁保护, 可以多线程添加记录到 leader副本 上, 但是如果ISR更新过程会获取写锁, 此时要等待ISR更新完毕</span></span><br><span class="line">  <span class="keyword">val</span> (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) &#123;</span><br><span class="line">    <span class="comment">// 若leader副本的id为本地的broker id, 则返回对应的 Replica对象</span></span><br><span class="line">    leaderReplicaIfLocal <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">Some</span>(leaderReplica) =&gt; <span class="comment">// leader副本</span></span><br><span class="line">        <span class="keyword">val</span> log = leaderReplica.log.get <span class="comment">// append-only的Log对象</span></span><br><span class="line">        <span class="keyword">val</span> minIsr = log.config.minInSyncReplicas <span class="comment">// min.insync.replicas 配置</span></span><br><span class="line">        <span class="keyword">val</span> inSyncSize = inSyncReplicas.size <span class="comment">// ISR数量</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// acks为-1时, 客户端会等待所有ISR确认收到消息时才返回, 此时配置 min.insync.replicas</span></span><br><span class="line">        <span class="comment">// 指定了这个ISR的最小数量, 因此ISR数量不够时会抛出ISR副本太少的异常</span></span><br><span class="line">        <span class="keyword">if</span> (inSyncSize &lt; minIsr &amp;&amp; requiredAcks == <span class="number">-1</span>) &#123;</span><br><span class="line">          <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">NotEnoughReplicasException</span>(<span class="string">&quot;Number of insync replicas for partition %s is [%d], below required minimum [%d]&quot;</span></span><br><span class="line">            .format(topicPartition, inSyncSize, minIsr))</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 将消息集写入日志, 分配 offsets 和 分区leader的epoch</span></span><br><span class="line">        <span class="keyword">val</span> info = log.appendAsLeader(records, leaderEpoch = <span class="keyword">this</span>.leaderEpoch, isFromClient)</span><br><span class="line">        <span class="comment">// probably unblock some follower fetch requests since log end offset has been updated</span></span><br><span class="line">        <span class="comment">// 因为 LEO(log end offset) 已经更新了, 所以某些 follower 的 fetch请求可能解除阻塞了, 于是</span></span><br><span class="line">        <span class="comment">// replicaManager.delayedFetchPurgatory 尝试完成该分区的延迟的fetch请求, 因为 LEO(log end offset)已经跟新</span></span><br><span class="line">        replicaManager.tryCompleteDelayedFetch(<span class="type">TopicPartitionOperationKey</span>(<span class="keyword">this</span>.topic, <span class="keyword">this</span>.partitionId))</span><br><span class="line">        <span class="comment">// 因为 ISR 可能只剩1个, 因此可能需要增加HW (high watermark)</span></span><br><span class="line">        (info, maybeIncrementLeaderHW(leaderReplica))</span><br><span class="line"></span><br><span class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// 非leader副本</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">NotLeaderForPartitionException</span>(<span class="string">&quot;Leader not local for partition %s on broker %d&quot;</span></span><br><span class="line">          .format(topicPartition, localBrokerId))</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// some delayed operations may be unblocked after HW changed</span></span><br><span class="line">  <span class="comment">// 一些延迟操作可能因为 HW 的改变而解除阻塞, 因此尝试完成这些延迟请求</span></span><br><span class="line">  <span class="keyword">if</span> (leaderHWIncremented)</span><br><span class="line">    tryCompleteDelayedRequests()</span><br><span class="line"></span><br><span class="line">  info <span class="comment">// log.AppendAsLeader返回的结果</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>这里有几个方法暂时没看细节，将其列出（对于<code>server</code>包之外的标注包名），之后有可能的话单独阅读：</p>
+<ul>
+<li><code>log.Log.appendAsLeader</code>：将消息集，分配的offset，leader副本的epoch写入本地消息日志；</li>
+<li><code>DelayedOperation.checkAndComplete(key: Any)</code>：检查某些**延迟操作(delayed operations)**用给定的key能否完成，若能则完成；</li>
+<li><code>cluster.Partition.maybeIncrementLeaderHW</code>：检查并且可能增加分区的HW，仅当分区ISR改变或者任意副本的LEO改变时才更新。</li>
+</ul>
+<p>由于本小节涉及到分区的操作，来回顾一些基本概念，每个分区都有多个broker来保存，实现消息的冗余备份，这些broker称为该分区的<strong>副本（replica）</strong>。对每个分区，存在唯一的<strong>leader副本</strong>（通过选举产生），与客户端进行直接读写，而其他副本为<strong>follower</strong>，不断地从leader复制最新的消息。与leader保持同步的follower被称为**ISR(in-sync replica)**，而某些follower会因为某些原因复制速度较慢或者和leader断开连接（通过某种规则判断），此时会从ISR中移除，直到重新跟上进度会重新加入ISR。</p>
+<p><strong>HW(high watermark, 高水位)<strong>即最新</strong>已提交的（committed）</strong>消息的offset，即所有ISR的分区日志上都写入了该消息，消费者无法拉取比HW更大的offset，从而保证leader一旦不可用，消费者之前消费的消息存在于任意ISR的消息日志中。</p>
+<p>**LEO(log end offset)**是所有副本都会维护的offset，即当前副本最后一个消息的offset+1，也就是如果有新的消息写入，那么它的offset即之前的LEO，而副本将消息写入消息日志后，LEO会递增。</p>
+<p>至于<strong>epoch</strong>这个概念是Kafka 0.11引入的，暂时还不清楚具体功能，之后再提。</p>
+<h2 id="appendToLocalLog总结"><a href="#appendToLocalLog总结" class="headerlink" title="appendToLocalLog总结"></a>appendToLocalLog总结</h2><p>在之前将客户端发送的请求解析成了<strong>分区</strong>到<strong>消息集</strong>的映射，而返回值是<strong>分区</strong>到<code>LogAppendResult</code>的映射，因此只对遍历整个<code>Map</code>，对每对分区消息集进行处理得到<code>LogAppendResult</code>即可：</p>
+<ol>
+<li>对<code>__consumer_offsets</code>这样的内部主题，验证请求头的client id是否为管理员（admin）的id，否则返回<em>Cannot append to internal topic</em>的错误；</li>
+<li>在<code>ReplicaManager</code>维护的当前broker上的分区列表中找到对应的分区；</li>
+<li>若查找失败则返回*Partition … doesn’t exist on …*的错误；</li>
+<li>若分区不可用，则返回*Partition … is in an offline log directory on broker …*的错误；</li>
+<li>若当前broker不是分区的leader，则返回*Leader not local for partition … on broker …*的错误；</li>
+<li>若acks字段为-1，且ISR数量小于<code>min.insync.replicas</code>配置的数量，则返回<em>Number of insync replicas for partition … is … below required minimum</em>的错误；</li>
+<li>将消息集写入本地日志，并给当前分区分配offsets和leader epoch；</li>
+<li>处理延后处理的Fetch请求，可能更新HW；</li>
+<li>若更新HW，则处理延后处理的请求。</li>
+</ol>
+<p>前面的流程都是一些合法性判断，主要是7~9这几步，待深入阅读的内容：</p>
+<ol>
+<li>对指定分区，写入日志后如何分配offsets和leader epoch？</li>
+<li>延后处理是怎么实现的？</li>
+</ol>
+<p>关于延后处理，主要是<code>ReplicaManager</code>的以下字段</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> delayedProducePurgatory: <span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedProduce</span>],</span><br><span class="line"><span class="keyword">val</span> delayedFetchPurgatory: <span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedFetch</span>],</span><br><span class="line"><span class="keyword">val</span> delayedDeleteRecordsPurgatory: <span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedDeleteRecords</span>]</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>都是<code>Purgatory</code>（炼狱），在辅助构造器中进行默认构造：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedProduce</span>](</span><br><span class="line">  purgatoryName = <span class="string">&quot;Produce&quot;</span>, brokerId = config.brokerId,</span><br><span class="line">  purgeInterval = config.producerPurgatoryPurgeIntervalRequests),</span><br><span class="line"><span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedFetch</span>](</span><br><span class="line">  purgatoryName = <span class="string">&quot;Fetch&quot;</span>, brokerId = config.brokerId,</span><br><span class="line">  purgeInterval = config.fetchPurgatoryPurgeIntervalRequests),</span><br><span class="line"><span class="type">DelayedOperationPurgatory</span>[<span class="type">DelayedDeleteRecords</span>](</span><br><span class="line">  purgatoryName = <span class="string">&quot;DeleteRecords&quot;</span>, brokerId = config.brokerId,</span><br><span class="line">  purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>都是泛型类<code>DelayedOperationPurgatory</code>，类型参数不同。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本篇开始阅读Produce请求的处理，首先从官网阅读了Kafka 1.1对应的Produce请求和响应协议，然后阅读<code>KafkaApis</code>类的处理方法<code>handleProduceRequest</code>。</p>
+<p>跳过了加密&#x2F;认证的部分，实际上是由<code>ReplicaManager</code>来处理，调用<code>appendRecords</code>方法，接受了客户端Produce请求中的acks和timeout两个关键字段。</p>
+<p>首先验证acks是否合法（-1, 0 or 1），对不合法acks发送<code>INVALID_REQUIRED_ACKS</code>响应。</p>
+<p>然后调用<code>appendToLocalLog</code>方法，也是本篇主要阅读的部分。</p>
+<p>之后的处理，以及<code>appendRecords</code>接收的回调函数（比如如何发送响应）的实现，日志的写入，分区的offsets和leader epoch的更新，以及如何延迟处理将在之后进行阅读。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/10/14/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB05-%E6%B6%88%E6%81%AF%E5%8D%8F%E8%AE%AE%E9%98%85%E8%AF%BB%E4%B9%8BMessage/" rel="prev" title="Kafka源码阅读05-消息协议阅读之Message">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读05-消息协议阅读之Message
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/" rel="next" title="Kafka源码阅读07: Produce请求(2): 发送响应">
+      Kafka源码阅读07: Produce请求(2): 发送响应 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9B%9E%E9%A1%BE"><span class="nav-number">1.</span> <span class="nav-text">回顾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Produce%E5%8D%8F%E8%AE%AE"><span class="nav-number">2.</span> <span class="nav-text">Produce协议</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E6%A0%BC%E5%BC%8F"><span class="nav-number">2.1.</span> <span class="nav-text">请求格式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%93%8D%E5%BA%94%E6%A0%BC%E5%BC%8F"><span class="nav-number">2.2.</span> <span class="nav-text">响应格式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#handleProduceRequest"><span class="nav-number">3.</span> <span class="nav-text">handleProduceRequest</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Idea%E8%B0%83%E8%AF%95"><span class="nav-number">3.1.</span> <span class="nav-text">Idea调试</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ReplicaManager-appendRecords"><span class="nav-number">4.</span> <span class="nav-text">ReplicaManager.appendRecords</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#time%E5%AD%97%E6%AE%B5"><span class="nav-number">4.1.</span> <span class="nav-text">time字段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#appendToLocalLog"><span class="nav-number">4.2.</span> <span class="nav-text">appendToLocalLog</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Partition-appendRecordsToLeader"><span class="nav-number">4.3.</span> <span class="nav-text">Partition.appendRecordsToLeader</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#appendToLocalLog%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">appendToLocalLog总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

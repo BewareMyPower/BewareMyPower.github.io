@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言最近做的一个小程序，需要对时间戳和对应日期字符串进行相互转换，于是二话不说直接翻看The Linux Programming Interface(TLPI)查API。翻到了下面这张图：  我的时间戳是自epoch(UTC)以来的毫秒数表示，拟定转换的是年月日时分秒，外加个毫秒，思路就很简单：  输入字符串：用strptime转换成struct tm类型，再用sscanf读取毫秒，最后用mkti">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux C mktime进行时间转换的陷阱">
+<meta property="og:url" content="http://yoursite.com/2019/07/22/Linux-C-mktime%E8%BF%9B%E8%A1%8C%E6%97%B6%E9%97%B4%E8%BD%AC%E6%8D%A2%E7%9A%84%E9%99%B7%E9%98%B1/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言最近做的一个小程序，需要对时间戳和对应日期字符串进行相互转换，于是二话不说直接翻看The Linux Programming Interface(TLPI)查API。翻到了下面这张图：  我的时间戳是自epoch(UTC)以来的毫秒数表示，拟定转换的是年月日时分秒，外加个毫秒，思路就很简单：  输入字符串：用strptime转换成struct tm类型，再用sscanf读取毫秒，最后用mkti">
+<meta property="og:locale">
+<meta property="og:image" content="http://yoursite.com/%E6%97%B6%E9%97%B4%E6%A0%BC%E5%BC%8F%E8%BD%AC%E6%8D%A2%E5%87%BD%E6%95%B0.JPG">
+<meta property="article:published_time" content="2019-07-22T14:10:36.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.222Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/%E6%97%B6%E9%97%B4%E6%A0%BC%E5%BC%8F%E8%BD%AC%E6%8D%A2%E5%87%BD%E6%95%B0.JPG">
+
+<link rel="canonical" href="http://yoursite.com/2019/07/22/Linux-C-mktime%E8%BF%9B%E8%A1%8C%E6%97%B6%E9%97%B4%E8%BD%AC%E6%8D%A2%E7%9A%84%E9%99%B7%E9%98%B1/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Linux C mktime进行时间转换的陷阱 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/07/22/Linux-C-mktime%E8%BF%9B%E8%A1%8C%E6%97%B6%E9%97%B4%E8%BD%AC%E6%8D%A2%E7%9A%84%E9%99%B7%E9%98%B1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux C mktime进行时间转换的陷阱
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-07-22 22:10:36" itemprop="dateCreated datePublished" datetime="2019-07-22T22:10:36+08:00">2019-07-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近做的一个小程序，需要对时间戳和对应日期字符串进行相互转换，于是二话不说直接翻看<em>The Linux Programming Interface</em>(<em>TLPI</em>)查API。翻到了下面这张图：</p>
+<p><img src="/%E6%97%B6%E9%97%B4%E6%A0%BC%E5%BC%8F%E8%BD%AC%E6%8D%A2%E5%87%BD%E6%95%B0.JPG" alt="时间格式转换函数"></p>
+<p>我的时间戳是自epoch(UTC)以来的毫秒数表示，拟定转换的是年月日时分秒，外加个毫秒，思路就很简单：</p>
+<ol>
+<li>输入字符串：用<code>strptime</code>转换成<code>struct tm</code>类型，再用<code>sscanf</code>读取毫秒，最后用<code>mktime</code>将<code>tm</code>对象转换成<code>time_t</code>（自epoch(UTC)以来的秒数）乘以1000加上毫秒数；</li>
+<li>输入时间戳：除以1000得到秒数，模1000得到毫秒数，然后用<code>strftime</code>将秒数格式化，再用<code>snprintf</code>将毫秒数格式化和’.’一起添加到末尾。</li>
+</ol>
+<p>当然，输入字符串的情况下，考虑健壮性的话需要对<code>tm</code>对象的各字段进行合法性检查，这里就不详述了。</p>
+<h2 id="奇妙的BUG"><a href="#奇妙的BUG" class="headerlink" title="奇妙的BUG"></a>奇妙的BUG</h2><p>但是写完后进行测试，输入字符串，转换成时间戳，然后再转换回字符串。发现一个十分奇葩的错误，就是转换回去后比原来要少了1给小时，比如”2000-02-29 10:01:20.094”会变成”2000-02-29 09:01:20.094”，也就是说其他的功能都没错。</p>
+<p>在此之前我已经考虑到了时区的问题，因此确认过<code>mktime</code>的输入参数是本地时区，因此<code>strftime</code>的输入参数需要用<code>localtime</code>而非<code>gmtime</code>。</p>
+<p>为了复现这个BUG，以及描述问题的原因，可以编译运行下面这段代码（忽略了返回值检查）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;stdio.h&gt;</span><br><span class="line">#include &lt;time.h&gt;</span><br><span class="line"></span><br><span class="line">int main(int argc, char* argv[]) &#123;</span><br><span class="line">  if (argc &lt; 2) &#123;</span><br><span class="line">    fprintf(stderr, &quot;Usage: %s yyyy-mm-dd hh:mm:dd\n&quot;, argv[0]);</span><br><span class="line">    return 1;</span><br><span class="line">  &#125;</span><br><span class="line">  printf(&quot;before: %s\n&quot;, argv[1]);</span><br><span class="line">  struct tm tm_;</span><br><span class="line">  strptime(argv[1], &quot;%F %T&quot;, &amp;tm_);</span><br><span class="line">  auto dump_tm = [](const struct tm* tmp, const char* msg) &#123;</span><br><span class="line">    printf(&quot;%s: %04d-%02d-%02d %02d:%02d:%02d\n&quot;, msg, tmp-&gt;tm_year + 1900,</span><br><span class="line">           tmp-&gt;tm_mon + 1, tmp-&gt;tm_mday, tmp-&gt;tm_hour, tmp-&gt;tm_min,</span><br><span class="line">           tmp-&gt;tm_sec);</span><br><span class="line">  &#125;;</span><br><span class="line">  dump_tm(&amp;tm_, &quot;before mktime&quot;);</span><br><span class="line">  auto timestamp = mktime(&amp;tm_);</span><br><span class="line">  dump_tm(&amp;tm_, &quot;after mktime&quot;);</span><br><span class="line">  char buf[128];</span><br><span class="line">  strftime(buf, sizeof(buf), &quot;%F %T&quot;, localtime(&amp;timestamp));</span><br><span class="line">  printf(&quot;after: %s\n&quot;, buf);</span><br><span class="line">  return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>设置几个时间，运行结果如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"># ./a.out &quot;2001-02-28 01:00:00&quot;</span><br><span class="line">before: 2001-02-28 01:00:00</span><br><span class="line">before mktime: 2001-02-28 01:00:00</span><br><span class="line">after mktime: 2001-02-28 01:00:00</span><br><span class="line">after: 2001-02-28 01:00:00</span><br><span class="line"># ./a.out &quot;2000-02-29 01:00:00&quot;</span><br><span class="line">before: 2000-02-29 01:00:00</span><br><span class="line">before mktime: 2000-02-29 01:00:00</span><br><span class="line">after mktime: 2000-02-29 00:00:00</span><br><span class="line">after: 2000-02-29 00:00:00</span><br><span class="line"># ./a.out &quot;2004-02-29 01:00:00&quot;</span><br><span class="line">before: 2004-02-29 01:00:00</span><br><span class="line">before mktime: 2004-02-29 01:00:00</span><br><span class="line">after mktime: 2004-02-29 00:00:00</span><br><span class="line">after: 2004-02-29 00:00:00</span><br></pre></td></tr></table></figure>
+
+<p>可以发现中间的输入结果有误，一开始怀疑是闰年的缘故，但是2004年和2000年的结果并不相同，而它们都是闰年。此外实测发现”2000-01-29 01:00:00”也出错。</p>
+<h2 id="原因及解决方法"><a href="#原因及解决方法" class="headerlink" title="原因及解决方法"></a>原因及解决方法</h2><p>其实问题的关键出在<code>struct tm</code>结构的<code>tm_idst</code>字段，可以发现无论结果是否转换错误，<code>mktime</code>始终把<code>tm_idst</code>重置为0，而调用之前<code>tm_idst</code>为非零值。</p>
+<p>这个字段即DST，Daylight Saving Time。若大于0则将该时间视为夏令时，若为0则将该时间视为标准间(忽略夏令时)，若小于0则试图使用时区信息和系统数据库来确定设置。而mktime()在进行转换时会对时区进行设置，若DST未生效，则将<code>tm_idst</code>置为0，若DST生效，则会将其置为正值。</p>
+<p>因此就是<strong>夏令时</strong>的问题，<a target="_blank" rel="noopener" href="https://blog.csdn.net/duyiwuer2009/article/details/42459677">struct tm中的tm_idst以及mktime</a>的测试中2001年以前的时间使用DST则会比其他情况晚1小时，当然，这个测试和我的略有出入，但我测试的2001年之后的确实也没出现这问题。</p>
+<p><a target="_blank" rel="noopener" href="https://www.cnblogs.com/dongzhiquan/archive/2011/11/05/2237075.html">mktime 夏令时</a>则使用了一种叫较为复杂的方法。</p>
+<p>这个问题确实造成了不少人的困扰，最简单的方法就是在<code>mktime</code>之前将<code>tm_idst</code>设为-1，让系统为你解决这个问题。但实际上并非如此，比如<a target="_blank" rel="noopener" href="https://www.cnblogs.com/dongzhiquan/archive/2011/11/05/2237075.html">mktime 夏令时</a>文中就提到了：</p>
+<blockquote>
+<p>俄罗斯时间2008年10月26日2:30由于夏令时的跳变会经过2次，这2次所代表的日历时间明显不同。</p>
+</blockquote>
+<p>stackoverflow上也有讨论：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/8558919/mktime-and-tm-isdst">mktime-and-tm-isdst</a>，其中Rich Jahn也提到了即使设为-1也不代表能“自动推断是否使用夏令时：</p>
+<blockquote>
+<p>-1 is a possible input, but I would think of it as meaning “Unknown”. Don’t think of it as meaning “determine automatically”, because in general, mktime() can’t always determine it automatically.</p>
+<p>The explicit DST status (0 or 1) should come from something external to the software, for example store it in the file or database, or prompt the user.</p>
+</blockquote>
+<p>最好的解决方法还是在时间后面加上UTC，比如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">struct tm tm_;</span><br><span class="line">char* p = strptime(&quot;2004-02-29 01:00:00.039 UTC&quot;, &quot;%F %T&quot;, &amp;tm_);</span><br></pre></td></tr></table></figure>
+
+<p>调用完毕后返回值<code>p</code>指向的是<code>&quot;.039 UTC&quot;</code>，后缀<code>UTC</code>并不影响返回值，因此仍然可以对<code>p</code>进行<code>sscanf</code>或者<code>strtol</code>操作获取毫秒数。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/06/21/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-3-Go%E5%BC%80%E5%8F%91%E9%85%8D%E7%BD%AE/" rel="prev" title="我的vim开发环境搭建(3): Go开发配置">
+      <i class="fa fa-chevron-left"></i> 我的vim开发环境搭建(3): Go开发配置
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/07/26/%E6%88%91%E7%9A%84vim%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA-4-GDB%E5%8D%87%E7%BA%A78-0/" rel="next" title="我的vim开发环境搭建(4): GDB升级8.0">
+      我的vim开发环境搭建(4): GDB升级8.0 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A5%87%E5%A6%99%E7%9A%84BUG"><span class="nav-number">2.</span> <span class="nav-text">奇妙的BUG</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8E%9F%E5%9B%A0%E5%8F%8A%E8%A7%A3%E5%86%B3%E6%96%B9%E6%B3%95"><span class="nav-number">3.</span> <span class="nav-text">原因及解决方法</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

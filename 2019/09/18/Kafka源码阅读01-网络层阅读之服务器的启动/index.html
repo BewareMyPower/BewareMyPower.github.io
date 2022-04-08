@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言今天正式开始阅读Kafka源码，作为阅读笔记的第一篇，先简单地介绍下背景。 阅读的Kafka版本是1.1.0，服务端源码在core.main.scala.kafka目录下，该目录下的源码文件仅有Kafka.scala，也就是服务端的启动入口，其他的若干个模块都阻止在各子目录下，这里首先阅读的是网络层，也就是network子目录下的代码。 阅读思路是直接看公用方法，然后再给一些逻辑以及用到的字段">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读01: 网络层阅读之服务器的启动">
+<meta property="og:url" content="http://yoursite.com/2019/09/18/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB01-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%90%AF%E5%8A%A8/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言今天正式开始阅读Kafka源码，作为阅读笔记的第一篇，先简单地介绍下背景。 阅读的Kafka版本是1.1.0，服务端源码在core.main.scala.kafka目录下，该目录下的源码文件仅有Kafka.scala，也就是服务端的启动入口，其他的若干个模块都阻止在各子目录下，这里首先阅读的是网络层，也就是network子目录下的代码。 阅读思路是直接看公用方法，然后再给一些逻辑以及用到的字段">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-09-18T11:47:06.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.217Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/09/18/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB01-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%90%AF%E5%8A%A8/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读01: 网络层阅读之服务器的启动 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/09/18/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB01-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%90%AF%E5%8A%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读01: 网络层阅读之服务器的启动
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-09-18 19:47:06" itemprop="dateCreated datePublished" datetime="2019-09-18T19:47:06+08:00">2019-09-18</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>今天正式开始阅读Kafka源码，作为阅读笔记的第一篇，先简单地介绍下背景。</p>
+<p>阅读的Kafka版本是1.1.0，服务端源码在<code>core.main.scala.kafka</code>目录下，该目录下的源码文件仅有<code>Kafka.scala</code>，也就是服务端的启动入口，其他的若干个模块都阻止在各子目录下，这里首先阅读的是网络层，也就是<code>network</code>子目录下的代码。</p>
+<p>阅读思路是直接看公用方法，然后再给一些逻辑以及用到的字段作注释，否则单看某些字段不看语境也不知道做什么。注释里会给英文两边加空格，逗号也使用英文逗号，方便vim快捷键按词前进&#x2F;后退。</p>
+<p>使用Intellij Idea阅读的，之前用得比较少，也很折腾了下配置过程，记录一些阅读源码的方法：</p>
+<ul>
+<li>光标选中+单击鼠标左键：跳转至变量&#x2F;函数定义处；</li>
+<li>Navigate菜单栏的Back和Forward，快捷键是<code>Ctrl+Alt+Left/Right</code>：后退&#x2F;前进到前&#x2F;后一次阅读的地方，一般时配合跳转功能回退；</li>
+<li>光标选中+鼠标右键，选择Find Usages，快捷键是<code>Alt+Shift+F7</code>：查看变量&#x2F;函数所有使用的地方；</li>
+<li>快捷键<code>Alt+F7</code>：查看类的所有字段和方法。</li>
+</ul>
+<p>对应我阅读C&#x2F;C++源码时vim的<code>Ctrl+J</code>（<code>YCM</code>）&#x2F;<code>Ctrl+]</code>（<code>ctags</code>）跳转，<code>Ctrl+O</code>回退，<code>LeaderF</code>查看类的字段和方法。之前vim一直没配置查找所有调用处的功能，一直是手动写个简单脚本用<code>egrep</code>在当前目录下递归搜关键词的……</p>
+<p>不过IDE优点就是功能更大更全，上手新语言时直接使用，不必每接触一门语言旧学习怎么定制功能。</p>
+<h2 id="SocketServer"><a href="#SocketServer" class="headerlink" title="SocketServer"></a>SocketServer</h2><p>注释表明了它是一个NIO套接字服务器，其线程模型是：</p>
+<ul>
+<li>1个Acceptor线程处理新连接；</li>
+<li>Acceptor有N个Processor线程，其中每个都有自己的Selector从套接字中读取请求；</li>
+<li>M个Handler线程，处理请求，并将回应发给Processor线程用于写入。</li>
+</ul>
+<p><code>SocketServer</code>的主构造器有以下参数：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> config: <span class="type">KafkaConfig</span> <span class="comment">// 配置文件</span></span><br><span class="line"><span class="keyword">val</span> metric: <span class="type">Metrics</span> <span class="comment">// 度量指标</span></span><br><span class="line"><span class="keyword">val</span> time: <span class="type">Time</span> <span class="comment">// 对象创建时间</span></span><br><span class="line"><span class="keyword">val</span> credentialProvider: <span class="type">CredentialProvider</span> <span class="comment">// 证书提供者</span></span><br></pre></td></tr></table></figure>
+
+<p>混入了<code>Logging</code>和<code>KafkaMetricsGroup</code>特质，后者继承自前者，但并没重写<code>info()</code>等日志方法，而是将不同类型的metric（度量指标）给组织起来，提供了各种metric的工厂方法。</p>
+<p>对于日志，设置了类相关的前缀表明broker id：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> logContext = <span class="keyword">new</span> <span class="type">LogContext</span>(<span class="string">s&quot;[SocketServer brokerId=<span class="subst">$&#123;config.brokerId&#125;</span>] &quot;</span>)</span><br><span class="line"><span class="keyword">this</span>.logIdent = logContext.logPrefix</span><br></pre></td></tr></table></figure>
+
+<p>涉及到的一些字段，我添上了注释并按相关度整合了下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 每个ip的最大连接数, 配置: max.connections.per.ip</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> maxConnectionsPerIp = config.maxConnectionsPerIp</span><br><span class="line"><span class="comment">// 指定ip的最大连接数, 会覆盖 maxConnectionsPerIp, 配置: max.connections.per.ip.overrides</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides</span><br><span class="line"><span class="comment">// 由以上参数创建</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">var</span> connectionQuotas: <span class="type">ConnectionQuotas</span> = _</span><br><span class="line"></span><br><span class="line"><span class="comment">// 请求队列的最大容量, 配置: queued.max.requests</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> maxQueuedRequests = config.queuedMaxRequests</span><br><span class="line"><span class="comment">// 内部维护了一个请求队列</span></span><br><span class="line"><span class="keyword">val</span> requestChannel = <span class="keyword">new</span> <span class="type">RequestChannel</span>(maxQueuedRequests)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 每个 Processor 拥有自己的 Selector, 用于从连接中读取请求和写回响应</span></span><br><span class="line"><span class="comment">// Processor 会将请求发送至 requestChannel, 会从 responseChannels 中读取响应</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> processors = <span class="keyword">new</span> <span class="type">ConcurrentHashMap</span>[<span class="type">Int</span>, <span class="type">Processor</span>]() <span class="comment">// key: id</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">var</span> nextProcessorId = <span class="number">0</span> <span class="comment">// 递增作为每个 processor 的id</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// key: EndPoint, 即配置 listeners 指定的 ip/port 以及其 SecurityProtocol (默认PLAINTEXT)</span></span><br><span class="line"><span class="comment">// 对每个绑定的 ip/port 都创建唯一对应的 Acceptor, 用于创建连接 Channel</span></span><br><span class="line"><span class="comment">// PS: 该字段在 network包 内可访问，实际上目前也就这个类会访问。</span></span><br><span class="line"><span class="keyword">private</span>[network] <span class="keyword">val</span> acceptors = <span class="keyword">new</span> <span class="type">ConcurrentHashMap</span>[<span class="type">EndPoint</span>, <span class="type">Acceptor</span>]()</span><br></pre></td></tr></table></figure>
+
+<h2 id="服务器启动源码分析"><a href="#服务器启动源码分析" class="headerlink" title="服务器启动源码分析"></a>服务器启动源码分析</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">startup</span></span>() &#123;</span><br><span class="line">  <span class="keyword">this</span>.synchronized &#123;</span><br><span class="line">    <span class="comment">// connectionQuotas 用于限制IP的最大连接数</span></span><br><span class="line">    connectionQuotas = <span class="keyword">new</span> <span class="type">ConnectionQuotas</span>(maxConnectionsPerIp, maxConnectionsPerIpOverrides)</span><br><span class="line">    <span class="comment">// 创建 Acceptors 和 Processors</span></span><br><span class="line">    createAcceptorAndProcessors(config.numNetworkThreads, config.listeners)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 忽略了剩下的代码, 都是调用 KafkaMetricsGroup.newGauge 创建 Gauge对象, </span></span><br><span class="line">  <span class="comment">// 用于测量某些指标, 比如Processor的平均闲置百分比/内存池可用大小/内存池占用大小</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再看看 Acceptor 和 Processor 的创建：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">createAcceptorAndProcessors</span></span>(processorsPerListener: <span class="type">Int</span>,</span><br><span class="line">                                        endpoints: <span class="type">Seq</span>[<span class="type">EndPoint</span>]): <span class="type">Unit</span> = synchronized &#123;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// socket内部缓冲区大小，底层可用C函数 setsockopt 设置 SO_SNDBUF/SO_RCVBUF</span></span><br><span class="line">  <span class="keyword">val</span> sendBufferSize = config.socketSendBufferBytes <span class="comment">// socket.send.buffer.bytes</span></span><br><span class="line">  <span class="keyword">val</span> recvBufferSize = config.socketReceiveBufferBytes <span class="comment">// socket.receive.buffer.bytes</span></span><br><span class="line">  <span class="keyword">val</span> brokerId = config.brokerId <span class="comment">// broker.id</span></span><br><span class="line"></span><br><span class="line">  endpoints.foreach &#123; endpoint =&gt;</span><br><span class="line">    <span class="keyword">val</span> listenerName = endpoint.listenerName</span><br><span class="line">    <span class="keyword">val</span> securityProtocol = endpoint.securityProtocol</span><br><span class="line"></span><br><span class="line">    <span class="keyword">val</span> acceptor = <span class="keyword">new</span> <span class="type">Acceptor</span>(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)</span><br><span class="line">    <span class="type">KafkaThread</span>.nonDaemon(<span class="string">s&quot;kafka-socket-acceptor-<span class="subst">$listenerName</span>-<span class="subst">$securityProtocol</span>-<span class="subst">$&#123;endpoint.port&#125;</span>&quot;</span>, acceptor).start()</span><br><span class="line">    acceptor.awaitStartup() <span class="comment">// 等待acceptor线程完全启动</span></span><br><span class="line">    acceptors.put(endpoint, acceptor) <span class="comment">// 构建键值对 &lt;EndPoint, Acceptor&gt; 加入 acceptors</span></span><br><span class="line">    <span class="comment">// 单个 Acceptor 对应 processorsPerListener(即numNetworkThreads)个 Processors</span></span><br><span class="line">    addProcessors(acceptor, endpoint, processorsPerListener)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对每个<code>Acceptor</code>，会创建多个<code>Processor</code>，类似地，也存入<code>ConcurrentHashMap</code>中：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">addProcessors</span></span>(acceptor: <span class="type">Acceptor</span>, endpoint: <span class="type">EndPoint</span>, newProcessorsPerListener: <span class="type">Int</span>): <span class="type">Unit</span> = synchronized &#123;</span><br><span class="line">  <span class="keyword">val</span> listenerName = endpoint.listenerName</span><br><span class="line">  <span class="keyword">val</span> securityProtocol = endpoint.securityProtocol</span><br><span class="line">  <span class="keyword">val</span> listenerProcessors = <span class="keyword">new</span> <span class="type">ArrayBuffer</span>[<span class="type">Processor</span>]()</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (_ &lt;- <span class="number">0</span> until newProcessorsPerListener) &#123;</span><br><span class="line">    <span class="keyword">val</span> processor = newProcessor(nextProcessorId, connectionQuotas, listenerName, securityProtocol, memoryPool)</span><br><span class="line">    listenerProcessors += processor</span><br><span class="line">    <span class="comment">// 内部调用了 putIfAbsent() 方法将其加入了 requestChannel 内部维护的 ConcurrentHashMap[Int, Processor],</span></span><br><span class="line">    <span class="comment">// key为 processor.id, 使用 putIfAbsent() 方法是因为理论上 processer.id 是唯一的, 因此在插入重复的id时,</span></span><br><span class="line">    <span class="comment">// 不应插入新对象, 而是仅仅返回一个非空 Processor 并根据返回值打印日志</span></span><br><span class="line">    requestChannel.addProcessor(processor)</span><br><span class="line">    <span class="comment">// 仅在此递增 SocketServer 的 nextProcessId 字段，因此保证了对不同 Acceptor 的 Processors,</span></span><br><span class="line">    <span class="comment">// 其 id 是不同的，因此每个 Processor 在 processors 字段中都对应唯一的 key</span></span><br><span class="line">    nextProcessorId += <span class="number">1</span></span><br><span class="line">  &#125;</span><br><span class="line">  listenerProcessors.foreach(p =&gt; processors.put(p.id, p))</span><br><span class="line">  <span class="comment">// 启动 listenerProcessors 的所有 Processor 线程, 并将其添加到内部维护的 processor: ArrayBuffer[Processor] 中</span></span><br><span class="line">  acceptor.addProcessors(listenerProcessors)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="RequestChannel-x2F-Acceptor-x2F-Processor的字段"><a href="#RequestChannel-x2F-Acceptor-x2F-Processor的字段" class="headerlink" title="RequestChannel&#x2F;Acceptor&#x2F;Processor的字段"></a>RequestChannel&#x2F;Acceptor&#x2F;Processor的字段</h2><p>从上述代码可知，重点是<code>RequestChannel</code>&#x2F;<code>Acceptor</code>&#x2F;<code>Processor</code>这3个类型，于是现在看看它们创建时除去传入构造器的参数外初始化的其他字段（依然忽略metrics相关的）。</p>
+<p>首先是<code>RequestChannel</code>的字段：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 创建了固定长度的请求队列，queueSize由 queued.max.requests 决定</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> requestQueue = <span class="keyword">new</span> <span class="type">ArrayBlockingQueue</span>[<span class="type">BaseRequest</span>](queueSize)</span><br><span class="line"><span class="comment">// 之前已经提过，创建 Processors 时添加进的</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> processors = <span class="keyword">new</span> <span class="type">ConcurrentHashMap</span>[<span class="type">Int</span>, <span class="type">Processor</span>]()</span><br></pre></td></tr></table></figure>
+
+<p>此外，配置是使用<code>kafka.server.KafkaConfig</code>类实现的，默认配置在伴生对象<code>kafka.server.Defaults</code>中（比如默认的<code>queueSize</code>为500），并在<code>KafkaConfig</code>的伴生对象的<code>configDef</code>字段创建时加载。</p>
+<p>再就是<code>Acceptor</code>的字段：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NIO Selector, 用于注册 connect, read, write 等事件，并将事件分发给 Acceptor, Processors</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> nioSelector = <span class="type">NSelector</span>.open()</span><br><span class="line"><span class="comment">// 服务通道, 绑定 EndPoint, 用于接收客户端的连接, 类型为 ServerSocketChannel</span></span><br><span class="line"><span class="keyword">val</span> serverChannel = openServerSocket(endPoint.host, endPoint.port)</span><br><span class="line"><span class="comment">// 之前提过的，保存每个 Acceptor 对应的 Processors, 没有存为映射, 因为 Acceptor 要将</span></span><br><span class="line"><span class="comment">// 连接均衡地分配给 Processors, 不涉及查询操作, 更多地需要遍历, 比如round-robin算法</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> processors = <span class="keyword">new</span> <span class="type">ArrayBuffer</span>[<span class="type">Processor</span>]()</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>NSelector</code> 就是 <code>Selector</code> 的别名：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.nio.channels.&#123;<span class="type">Selector</span> =&gt; <span class="type">NSelector</span>&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后是<code>Processor</code>的字段：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// SocketChannel 的并发队列, 用于管理 Acceptor 分配的socket连接</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> newConnections = <span class="keyword">new</span> <span class="type">ConcurrentLinkedQueue</span>[<span class="type">SocketChannel</span>]()</span><br><span class="line"><span class="comment">// ConnectionId 到 Response 的映射, 缓存待发送的响应</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> inflightResponses = mutable.<span class="type">Map</span>[<span class="type">String</span>, <span class="type">RequestChannel</span>.<span class="type">Response</span>]()</span><br><span class="line"><span class="comment">// 缓存产生的响应</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> responseQueue = <span class="keyword">new</span> <span class="type">LinkedBlockingDeque</span>[<span class="type">RequestChannel</span>.<span class="type">Response</span>]()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 创建的是 kafka.common.network.Selector, 也就是自己实现的 Selector</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> selector = createSelector(</span><br><span class="line">  <span class="type">ChannelBuilders</span>.serverChannelBuilder(listenerName,</span><br><span class="line">    listenerName == config.interBrokerListenerName,</span><br><span class="line">    securityProtocol,</span><br><span class="line">    config,</span><br><span class="line">    credentialProvider.credentialCache,</span><br><span class="line">    credentialProvider.tokenCache))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 用于生成连接的 index, 类似 SocketServer 生成 Processor.id, 不过保证了 index 非负</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">var</span> nextConnectionIndex = <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<p>不得不说这里为何要使用 <code>ConcurrentLinkedQueue</code> 和 <code>LinkedBlockingDeque</code> 还是不清楚，但还是先不要在意细节，注意这里保存了2份<code>Response</code>，一个只是临时缓存处理后的响应，另一个则是真正待发送的响应，因为用key记录了连接信息：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 作为 inflightResponses 的key, 记录了本地地址/远程地址, 以及连接对应的索引</span></span><br><span class="line"><span class="comment">// 该索引是通过 nextConnectionIndex 自增生成的, 而且非负</span></span><br><span class="line"><span class="keyword">private</span>[network] <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">ConnectionId</span>(<span class="params">localHost: <span class="type">String</span>, localPort: <span class="type">Int</span>, remoteHost: <span class="type">String</span>, remotePort: <span class="type">Int</span>, index: <span class="type">Int</span></span>) </span>&#123;</span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">toString</span></span>: <span class="type">String</span> = <span class="string">s&quot;<span class="subst">$localHost</span>:<span class="subst">$localPort</span>-<span class="subst">$remoteHost</span>:<span class="subst">$remotePort</span>-<span class="subst">$index</span>&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="服务器启动总结"><a href="#服务器启动总结" class="headerlink" title="服务器启动总结"></a>服务器启动总结</h2><p>总结下来，启动<code>SocketServer</code>时其实就是根据配置参数创建了1个<code>RequestChannel</code>，M个<code>Acceptor</code>，M*N个<code>Processor</code>。其中M是监听地址的数量，N是<code>num.network.thread</code>配置的Acceptor对应的Processors的数量。</p>
+<p>每个监听地址除了ip和port外，还有协议类型和名称，这些共同组成了<code>EndPoint</code>类。</p>
+<ul>
+<li><code>SocketServer</code>保存<code>EndPoint</code>到<code>Acceptor</code>的映射和<code>Processor.id</code>到<code>Processor</code>的映射；</li>
+<li><code>requestChannel</code>持有M*N个<code>Processor</code>的<code>id</code>到其自身的映射；</li>
+<li>每个<code>Acceptor</code>持有1个<code>Selector</code>；</li>
+<li>每个<code>Acceptor</code>持有1个监听<code>EndPoint</code>的<code>ServerSocketChannel</code>；</li>
+<li>每个<code>Acceptor</code>持有N个<code>Processor</code>组成的数组；</li>
+<li>每个 <code>Processor</code> 持有1个<code>Selector</code>（Kafka自己实现的<code>Selectable</code>接口）；</li>
+<li>每个<code>Processor</code>持有一组socket连接；</li>
+<li><code>acceptors</code>和<code>processors</code>都启动了线程（供<code>M*(N+1)</code>个）构成了整个网络层的处理。</li>
+</ul>
+<p>Kafka的网络层是使用Reactor模式的，使用了Java NIO，所有的socket读写都是非阻塞模式，具体框架可以参考《Apacha Kafka源码剖析》一书，我目前也是照着这本书的思路去看源码。</p>
+<p>不过对Java NIO不熟悉，虽然看了眼核心还是分发事件的<code>Selector</code>（I&#x2F;O多路复用），但是封装得比较好。抽空去看看。</p>
+<p>网络层运转的核心还是<code>Acceptor</code>和<code>Processor</code>的线程函数，也就是这2个类的<code>run()</code>方法，也是接下来要读的部分。</p>
+<h2 id="为什么使用ConcurrentHashMap？"><a href="#为什么使用ConcurrentHashMap？" class="headerlink" title="为什么使用ConcurrentHashMap？"></a>为什么使用ConcurrentHashMap？</h2><p>《Apacha Kafka源码剖析》书中使用的是Kafka 0.10.0.1版本，其中<code>acceptors</code>和<code>processors</code>的类型是：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> processors = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Processor</span>](totalProcessorThreads)</span><br><span class="line"><span class="keyword">private</span>[network] <span class="keyword">val</span> acceptors = mutable.<span class="type">Map</span>[<span class="type">EndPoint</span>, <span class="type">Acceptor</span>]()</span><br></pre></td></tr></table></figure>
+
+<p>而1.1.0版本就都用<code>ConcurrentHashMap</code>来保存了，看源码时我也在想为什么不用数组去存processors，因为key就是从0到N-1。搜了下这个结构在Java 8用了不同于7的实现，抽空去看看。</p>
+<p>然后看到了<code>addListeners</code>&#x2F;<code>removeListeners</code>方法，前者根据新的<code>Seq[EndPoint]</code>重新创建<code>acceptors</code>和<code>processors</code>，后者则将指定的<code>Seq[EndPoint]</code>对应的<code>Acceptor</code>从<code>acceptors</code>中删除。而这两个方法在0.10.0.1版本中没有，所以就能用固定长度的数组来保存<code>processors</code>，也能用不支持并发访问的<code>mutable.Map</code>来保存<code>acceptors</code>。</p>
+<p>不过还有个不明白的地方，看到直接访问<code>acceptors</code>和<code>processors</code>的都是<code>SocketServer</code>内部，而除了<code>boundPort()</code>方法和<code>stopProcessingRequests()</code>外，所在访问它们的方法都直接用<code>synchronized</code>关键字保护了，而<code>boundPort()</code>方法仅在<code>xxxTest.scala</code>中被调用了，这样的话使用<code>ConcurrentHashMap</code>是否必要？</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/09/05/%E9%93%BE%E6%8E%A5%E9%80%89%E9%A1%B9RPATH%E4%BB%A5%E5%8F%8A%E5%9C%A8cmake%E5%92%8Cgcc%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8/" rel="prev" title="链接选项RPATH以及在cmake和gcc中的使用">
+      <i class="fa fa-chevron-left"></i> 链接选项RPATH以及在cmake和gcc中的使用
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/" rel="next" title="Kafka源码阅读02: 网络层阅读之Acceptor和Processor">
+      Kafka源码阅读02: 网络层阅读之Acceptor和Processor <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#SocketServer"><span class="nav-number">2.</span> <span class="nav-text">SocketServer</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%90%AF%E5%8A%A8%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="nav-number">3.</span> <span class="nav-text">服务器启动源码分析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#RequestChannel-x2F-Acceptor-x2F-Processor%E7%9A%84%E5%AD%97%E6%AE%B5"><span class="nav-number">4.</span> <span class="nav-text">RequestChannel&#x2F;Acceptor&#x2F;Processor的字段</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%90%AF%E5%8A%A8%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">服务器启动总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%BF%E7%94%A8ConcurrentHashMap%EF%BC%9F"><span class="nav-number">6.</span> <span class="nav-text">为什么使用ConcurrentHashMap？</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

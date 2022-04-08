@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前文回顾前一篇阅读了appendToLocalLog的部分，服务端在收到Produce请求时，会首先将消息写入本地消息日志： 12345val sTime &#x3D; time.milliseconds &#x2F;&#x2F; 取得当前毫秒级时间戳val localProduceResults &#x3D; appendToLocalLog(internalTopicsAllowed &#x3D; internalTopicsAllowed,">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读07: Produce请求(2): 发送响应">
+<meta property="og:url" content="http://yoursite.com/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前文回顾前一篇阅读了appendToLocalLog的部分，服务端在收到Produce请求时，会首先将消息写入本地消息日志： 12345val sTime &#x3D; time.milliseconds &#x2F;&#x2F; 取得当前毫秒级时间戳val localProduceResults &#x3D; appendToLocalLog(internalTopicsAllowed &#x3D; internalTopicsAllowed,">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-11-07T09:22:33.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.221Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读07: Produce请求(2): 发送响应 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读07: Produce请求(2): 发送响应
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-11-07 17:22:33" itemprop="dateCreated datePublished" datetime="2019-11-07T17:22:33+08:00">2019-11-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前文回顾"><a href="#前文回顾" class="headerlink" title="前文回顾"></a>前文回顾</h2><p>前一篇阅读了<code>appendToLocalLog</code>的部分，服务端在收到Produce请求时，会首先将消息写入本地消息日志：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> sTime = time.milliseconds <span class="comment">// 取得当前毫秒级时间戳</span></span><br><span class="line"><span class="keyword">val</span> localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,</span><br><span class="line">  isFromClient = isFromClient, entriesPerPartition, requiredAcks)</span><br><span class="line"><span class="comment">// 调试信息: 再次取得时间戳, 相减得到 appendToLocalLog 的用时</span></span><br><span class="line">debug(<span class="string">&quot;Produce to local log in %d ms&quot;</span>.format(time.milliseconds - sTime))</span><br></pre></td></tr></table></figure>
+
+<p>返回的<code>localProduceResults</code>类型是<code>Map[TopicPartition, LogAppendResult]</code>。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 正常结果: info有效，exception为None</span></span><br><span class="line"><span class="comment">// 错误结果: info各字段设为无效值，exception为某种异常，可通过error方法取得其错误信息</span></span><br><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">LogAppendResult</span>(<span class="params">info: <span class="type">LogAppendInfo</span>, exception: <span class="type">Option</span>[<span class="type">Throwable</span>] = <span class="type">None</span></span>) </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">error</span></span>: <span class="type">Errors</span> = exception <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="type">Errors</span>.<span class="type">NONE</span></span><br><span class="line">    <span class="keyword">case</span> <span class="type">Some</span>(e) =&gt; <span class="type">Errors</span>.forException(e)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>info</code>字段来自于<code>Log.appendAsLeader</code>的返回值，即实际添加到本地日志的消息，包含消息集的第1条消息和最后1条消息的offset（生产者在发送消息集时是不知道最后写入日志文件时消息的offset，只有在服务端写入日志时才会设置）。</p>
+<p>接下来阅读<code>ReplicaManager.appendRecords</code>中的后续处理。</p>
+<h2 id="ProducePartitionStatus的处理"><a href="#ProducePartitionStatus的处理" class="headerlink" title="ProducePartitionStatus的处理"></a>ProducePartitionStatus的处理</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将分区对应的处理结果转换成 ProducePartitionStatus 对象</span></span><br><span class="line"><span class="keyword">val</span> produceStatus = localProduceResults.map &#123; <span class="keyword">case</span> (topicPartition, result) =&gt;</span><br><span class="line">  topicPartition -&gt;</span><br><span class="line">          <span class="type">ProducePartitionStatus</span>(</span><br><span class="line">            <span class="comment">// lastOffset + 1 代表下一批消息的第1条消息的 offset</span></span><br><span class="line">            result.info.lastOffset + <span class="number">1</span>, <span class="comment">// required offset</span></span><br><span class="line">            <span class="comment">// 利用 LogAppendInfo 的各字段构造 PartitionResponse</span></span><br><span class="line">            <span class="keyword">new</span> <span class="type">PartitionResponse</span>(result.error, result.info.firstOffset, result.info.logAppendTime, result.info.logStartOffset)) <span class="comment">// response status</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 通过 KafkaApis.handleProduceRequest 传入的回调更新 KafkaApis.brokerTopicStats</span></span><br><span class="line">processingStatsCallback(localProduceResults.mapValues(_.info.recordsProcessingStats))</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">public static <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">PartitionResponse</span> </span>&#123;</span><br><span class="line">    public <span class="type">Errors</span> error; <span class="comment">// 错误信息</span></span><br><span class="line">    public long baseOffset; <span class="comment">// 消息集中第1条消息的offset</span></span><br><span class="line">    public long logAppendTime; <span class="comment">// 消息集写入日志文件时的时间戳</span></span><br><span class="line">    public long logStartOffset; <span class="comment">// 消息集写入日志文件时，日志文件的起始offset</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>回顾一下，在使用Kafka客户端时，生产者可以通过回调取得消息的元数据，像主题和分区，是在生产者发送前就已知的，但offset和时间戳则是由服务端在此处设置的。见<a target="_blank" rel="noopener" href="https://kafka.apache.org/11/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html">Kafka 1.1 Producer API</a>的<code>RecordMetadata</code>。</p>
+<p>接下来是一个if-else分支</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) &#123;</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="comment">// we can respond immediately</span></span><br><span class="line">  <span class="comment">// 取得 PartitionStatus 作为新的value传进 responseCallback, 即忽略了 offset 字段</span></span><br><span class="line">  <span class="keyword">val</span> produceResponseStatus = produceStatus.mapValues(status =&gt; status.responseStatus)</span><br><span class="line">  responseCallback(produceResponseStatus)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果<code>delayedProduceRequestRequired</code>返回<code>false</code>，则可以立刻发送响应，而且忽略了offset字段，因为该字段代表了下一批消息的第1个offset，而<code>PartitionStatus</code>本身就包含当前消息集的<code>baseOffset</code>。</p>
+<p>那么为何else分支就意味着可以立刻发送响应呢？</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">delayedProduceRequestRequired</span></span>(requiredAcks: <span class="type">Short</span>,</span><br><span class="line">                                          entriesPerPartition: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">MemoryRecords</span>],</span><br><span class="line">                                          localProduceResults: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">LogAppendResult</span>]): <span class="type">Boolean</span> = &#123;</span><br><span class="line">  requiredAcks == <span class="number">-1</span> &amp;&amp;</span><br><span class="line">  entriesPerPartition.nonEmpty &amp;&amp;</span><br><span class="line">  <span class="comment">// exception字段为Option类型，若不为None则isDefined返回true</span></span><br><span class="line">  localProduceResults.values.count(_.exception.isDefined) &lt; entriesPerPartition.size</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见，if分支意味着以下条件满足：</p>
+<ol>
+<li><code>requiredAcks</code>为-1，即生产者要等待分区的所有ISR收到消息后才会返回；</li>
+<li><code>entriesPerPartition</code>不为空，即存在需要添加消息的分区；</li>
+<li><code>localProduceResults</code>中至少存在1条成功的结果。</li>
+</ol>
+<p>相应地，else分支对应的是：</p>
+<ol>
+<li><code>requiredAcks</code>为0或1，即客户端无需等待服务端的响应或者只需要等待leader收到消息；</li>
+<li>没有消息需要写入（无论是没有可写入的分区还是全部消息写入出现异常），那么ISR也没必要去从leader复制数据，因此也可以直接返回响应。</li>
+</ol>
+<p>PS：第2个条件在处理Produce请求是是多余的判断，因为之前在<code>KafkaApis.handleProduceRequest</code>中已经判断过了：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (authorizedRequestInfo.isEmpty)</span><br><span class="line">  sendResponseCallback(<span class="type">Map</span>.empty)</span><br><span class="line"><span class="keyword">else</span> &#123; <span class="comment">// authorizedRequestInfo非空, 传入参数entriesPerPartition</span></span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">  replicaManager.appendRecords(</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    entriesPerPartition = authorizedRequestInfo,</span><br><span class="line">    <span class="comment">/* ... */</span>)</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说if分支里会等待所有ISR收到消息才会返回，查看if分支：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 构造 DelayedProduce 对象, 注意 timeout 仅在此处使用</span></span><br><span class="line"><span class="keyword">val</span> produceMetadata = <span class="type">ProduceMetadata</span>(requiredAcks, produceStatus)</span><br><span class="line"><span class="keyword">val</span> delayedProduce = <span class="keyword">new</span> <span class="type">DelayedProduce</span>(timeout, produceMetadata, <span class="keyword">this</span>, responseCallback, delayedProduceLock)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 通过 topic 和 partition 创建用于延迟生产操作的key</span></span><br><span class="line"><span class="keyword">val</span> producerRequestKeys = entriesPerPartition.keys.map(<span class="keyword">new</span> <span class="type">TopicPartitionOperationKey</span>(_)).toSeq</span><br><span class="line"></span><br><span class="line"><span class="comment">// 尝试立刻完成请求, 否则会将请求放入 purgatory 中, 因为在创建 DelayedProduce 对象时,</span></span><br><span class="line"><span class="comment">// 新的请求可能会到达, 从而使得这个操作处于可完成状态</span></span><br><span class="line">delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)</span><br></pre></td></tr></table></figure>
+
+<p>还是利用了purgatory，先不研究其实现细节，大致可以理解为，创建一个<code>DelayedProduce</code>对象，传入带offset和时间戳的消息集，设置timeout和响应回调，就能完成延迟生产。而purgatory只是用来确认是否完成，若没完成则将其扔进purgatory中。</p>
+<p>也就是说，响应回调不再是像else分支（以及之前的错误处理分支）中一样由当前线程去调用，而是由<code>DelayedProduce</code>对象去调用，从而实现了异步的方式等待所有ISR收到最新的消息，避免leader的<code>Handler</code>线程阻塞在<code>KafkaApis</code>对请求的处理中。</p>
+<p>另外，值得注意的是<code>timeout</code>是在构造这个<code>DelayedProduce</code>对象时才使用，也就是之前的写入本地日志的时间是不计算在内的，当然网络传输时间也是，可以回顾<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/">上一篇阅读笔记</a> 的<strong>2.1 请求格式</strong>中翻译的官网对<code>timeout</code>的说明。</p>
+<h2 id="sendResponseCallback"><a href="#sendResponseCallback" class="headerlink" title="sendResponseCallback"></a>sendResponseCallback</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendResponseCallback</span></span>(responseStatus: <span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">PartitionResponse</span>]) &#123;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 合并 responseStatus 和之前认证失败或者主题不存在产生的错误响应</span></span><br><span class="line">  <span class="keyword">val</span> mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses</span><br><span class="line">  <span class="keyword">var</span> errorInResponse = <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 检查是否有错误响应, 若有则将 errorInResponse 置为 true, 并将错误写入debug日志</span></span><br><span class="line">  mergedResponseStatus.foreach &#123; <span class="keyword">case</span> (topicPartition, status) =&gt;</span><br><span class="line">    <span class="keyword">if</span> (status.error != <span class="type">Errors</span>.<span class="type">NONE</span>) &#123;</span><br><span class="line">      errorInResponse = <span class="literal">true</span></span><br><span class="line">      <span class="comment">// 写入debug日志(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">produceResponseCallback</span></span>(bandwidthThrottleTimeMs: <span class="type">Int</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> (produceRequest.acks == <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="comment">// acks为0意味着客户端无需等待服务端响应, 因此服务端无需操作</span></span><br><span class="line">      <span class="comment">// 但是如果请求存在错误, 服务端需要关闭socket来通知客户端有错误发生, 然后更新元数据</span></span><br><span class="line">      <span class="keyword">if</span> (errorInResponse) &#123; <span class="comment">// 存在错误响应</span></span><br><span class="line">        <span class="comment">// 首先转换成 Map[TopicPartition, String], 其value为异常的类型名称, 然后将其字符串表示写入日志</span></span><br><span class="line">        <span class="keyword">val</span> exceptionsSummary = mergedResponseStatus.map &#123; <span class="keyword">case</span> (topicPartition, status) =&gt;</span><br><span class="line">          topicPartition -&gt; status.error.exceptionName</span><br><span class="line">        &#125;.mkString(<span class="string">&quot;, &quot;</span>)</span><br><span class="line">        <span class="comment">// 写入info日志(略)</span></span><br><span class="line">        closeConnection(request, <span class="keyword">new</span> <span class="type">ProduceResponse</span>(mergedResponseStatus.asJava).errorCounts)</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123; <span class="comment">// 不存在错误响应</span></span><br><span class="line">        sendNoOpResponseExemptThrottle(request)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123; <span class="comment">// acks为1或者-1</span></span><br><span class="line">      sendResponseMaybeThrottle(request, requestThrottleMs =&gt;</span><br><span class="line">        <span class="keyword">new</span> <span class="type">ProduceResponse</span>(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs))</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// When this callback is triggered, the remote API call has completed</span></span><br><span class="line">  <span class="comment">// 无论是在哪个处理分支, 这个回调函数必定是在远程API调用结束后才触发</span></span><br><span class="line">  request.apiRemoteCompleteTimeNanos = time.nanoseconds</span><br><span class="line"></span><br><span class="line">  quotas.produce.maybeRecordAndThrottle(</span><br><span class="line">    request.session.sanitizedUser, <span class="comment">// session认证用户名(没配置SSL认证则是ANONYMOUS)</span></span><br><span class="line">    request.header.clientId,</span><br><span class="line">    numBytesAppended,</span><br><span class="line">    produceResponseCallback)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于是接着之前的进行阅读，所以用到了一些之前创建的对象，见<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/">上一篇阅读笔记</a>的<strong>handleProduceRequest</strong>：</p>
+<ul>
+<li><code>unauthorizedTopicResponses</code>：对调用<code>KafkaApis.authorize</code>方法认证失败的请求生成的错误响应；</li>
+<li><code>nonExistingTopicResponses</code>：对目标主题不在<code>KafkaApis.metadataCache</code>中的请求生产的错误响应；</li>
+<li><code>numBytesAppended</code>：请求的总字节数，包含header部分。</li>
+</ul>
+<p>检测出是否有错误响应是为了传给<code>produceResponseCallback</code>，从而在acks为0时，关闭与客户端的socket连接来通知其更新元数据。而该回调被传入了<code>ClientQuotaManager.maybeRecordAndThrottle</code>方法，在未启用quotas的情况下会直接调用<code>produceResponseCallback</code>，分为以下3种情况：</p>
+<ol>
+<li><p>acks为0，且存在错误响应：关闭与客户端的连接，会引起客户端更新元数据；</p>
+</li>
+<li><p>acks为0，且不存在错误响应：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sendNoOpResponseExemptThrottle(request)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">sendNoOpResponseExemptThrottle</span></span>(request: <span class="type">RequestChannel</span>.<span class="type">Request</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  quotas.request.maybeRecordExempt(request)</span><br><span class="line">  sendResponse(request, <span class="type">None</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>会进入<code>KafkaApis.sendResponse</code>的<code>None</code>分支：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">requestChannel.sendResponse(<span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Response</span>(request, <span class="type">None</span>, <span class="type">NoOpAction</span>, <span class="type">None</span>))</span><br></pre></td></tr></table></figure>
+
+<p>回顾<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/">网络层阅读的之Acceptor和Processor</a>的<strong>4.2 processNewResponses</strong>，如果响应的类型是<code>NoOpAction</code>，只会给<code>Processor</code>与客户端的连接<code>Channel</code>重新注册读事件，并不会发送响应给客户端。</p>
+</li>
+<li><p>acks不为0：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sendResponseMaybeThrottle(request,</span><br><span class="line">  requestThrottleMs =&gt; <span class="keyword">new</span> <span class="type">ProduceResponse</span>(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs))</span><br></pre></td></tr></table></figure>
+
+<p>创建<code>ProduceResponse</code>的<code>throttleMs</code>为<code>bandwidthThrottleTimeMs</code>和<code>requestThrottleMs</code>之和，这两者都有各自对应的quotas对象，若未启用则为0。最终也会进入<code>KafkaApis.sendResponse</code>中：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> responseSend = request.context.buildResponse(response)</span><br><span class="line"><span class="keyword">val</span> responseString =</span><br><span class="line">  <span class="keyword">if</span> (<span class="type">RequestChannel</span>.isRequestLoggingEnabled) <span class="type">Some</span>(response.toString(request.context.apiVersion))</span><br><span class="line">  <span class="keyword">else</span> <span class="type">None</span></span><br><span class="line">requestChannel.sendResponse(<span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Response</span>(request, <span class="type">Some</span>(responseSend), <span class="type">SendAction</span>, responseString))</span><br></pre></td></tr></table></figure>
+
+<p>将<code>SendAction</code>类型的响应通过<code>RequestChannel</code>交给<code>Processor</code>，进一步发送给客户端。</p>
+</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本篇阅读了处理Produce请求的流程，接着写入本地日志后的代码继续阅读：</p>
+<p>写入本地日志后会返回处理结果，包含了每个请求写入的分区的相关状态，新增了消息集的<code>baseOffset</code>和写入日志的时间戳。对于acks字段为-1的情况，将timeout字段&#x2F;消息集以及发送响应的回调丢给<code>DelayedOperation</code>对象进行异步的延迟操作，并通过purgatory字段检查异步处理的结果。</p>
+<p>无论是<code>KafkaApis</code>本身，还是<code>DelayedOperation</code>，处理完后都会调用<code>sendResponseCallback</code>，acks不为0则根据Produce响应协议构造响应发送给客户端，acks为0则根据是否有错误响应而有不同的行为，若不包含错误响应则不进行操作，否则关闭socket，触发客户端重新获取元数据。</p>
+<p>至此，完成了服务端对Produce请求的阅读，但是有不少细节没有深入，有待进一步阅读：</p>
+<ul>
+<li><code>DelayedOperation</code>与<code>DelayedOperationPurgatory</code>：延迟操作的实现；</li>
+<li><code>Log</code>类，对本地日志目录和日志片段（segment）文件直接操作；</li>
+<li><code>Partition</code>类，管理了分区的副本broker，还有leader epoch等。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/" rel="prev" title="Kafka源码阅读06: Produce请求(1): 写入本地日志">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读06: Produce请求(1): 写入本地日志
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/11/22/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB08-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97%E7%9A%84%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0/" rel="next" title="Kafka源码阅读08: 写入本地日志的具体实现">
+      Kafka源码阅读08: 写入本地日志的具体实现 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E6%96%87%E5%9B%9E%E9%A1%BE"><span class="nav-number">1.</span> <span class="nav-text">前文回顾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ProducePartitionStatus%E7%9A%84%E5%A4%84%E7%90%86"><span class="nav-number">2.</span> <span class="nav-text">ProducePartitionStatus的处理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#sendResponseCallback"><span class="nav-number">3.</span> <span class="nav-text">sendResponseCallback</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="AbstractServerThreadAcceptor和Processor的抽象基类，封装了一些辅助的变量和方法（这里重新组织了下代码顺序）： 1234567891011121314151617181920212223242526272829303132333435363738private val startupLatch &#x3D; new CountDownLatch(1)@volatile pr">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读02: 网络层阅读之Acceptor和Processor">
+<meta property="og:url" content="http://yoursite.com/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="AbstractServerThreadAcceptor和Processor的抽象基类，封装了一些辅助的变量和方法（这里重新组织了下代码顺序）： 1234567891011121314151617181920212223242526272829303132333435363738private val startupLatch &#x3D; new CountDownLatch(1)@volatile pr">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-09-20T03:38:31.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.218Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读02: 网络层阅读之Acceptor和Processor | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/09/20/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB02-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BAcceptor%E5%92%8CProcessor/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读02: 网络层阅读之Acceptor和Processor
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-09-20 11:38:31" itemprop="dateCreated datePublished" datetime="2019-09-20T11:38:31+08:00">2019-09-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="AbstractServerThread"><a href="#AbstractServerThread" class="headerlink" title="AbstractServerThread"></a>AbstractServerThread</h2><p><code>Acceptor</code>和<code>Processor</code>的抽象基类，封装了一些辅助的变量和方法（这里重新组织了下代码顺序）：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> startupLatch = <span class="keyword">new</span> <span class="type">CountDownLatch</span>(<span class="number">1</span>)</span><br><span class="line"><span class="meta">@volatile</span> <span class="keyword">private</span> <span class="keyword">var</span> shutdownLatch = <span class="keyword">new</span> <span class="type">CountDownLatch</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">val</span> alive = <span class="keyword">new</span> <span class="type">AtomicBoolean</span>(<span class="literal">true</span>)</span><br><span class="line"><span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">isRunning</span></span>: <span class="type">Boolean</span> = alive.get</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">shutdown</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="comment">// 如果线程仍在运行, 则将 alive 置为true表示线程之后会关闭, 然后调用抽象方法 wakeup()</span></span><br><span class="line">  <span class="keyword">if</span> (alive.getAndSet(<span class="literal">false</span>))</span><br><span class="line">    wakeup()</span><br><span class="line">  shutdownLatch.await()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 等待线程完全启动</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">awaitStartup</span></span>(): <span class="type">Unit</span> = startupLatch.await</span><br><span class="line"></span><br><span class="line"><span class="comment">// 标识线程已经启动, 这样就可以等待停止操作了, 因此将 shutdownLatch 指向倒计时为1的对象</span></span><br><span class="line"><span class="comment">// 这样做是为了防止启动时抛出异常, 比如绑定正在使用的地址, 此时应该在处理异常之后仍然能 shutdown,</span></span><br><span class="line"><span class="comment">// 此时 shutdownComplete 的调用会因为异常而被跳过, 如果计数初始化为1会一直阻塞</span></span><br><span class="line"><span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">startupComplete</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="comment">// Replace the open latch with </span></span><br><span class="line">  shutdownLatch = <span class="keyword">new</span> <span class="type">CountDownLatch</span>(<span class="number">1</span>)</span><br><span class="line">  startupLatch.countDown()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 标识线程已经关闭</span></span><br><span class="line"><span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">shutdownComplete</span></span>(): <span class="type">Unit</span> = shutdownLatch.countDown()</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">close</span></span>(channel: <span class="type">SocketChannel</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">  <span class="keyword">if</span> (channel != <span class="literal">null</span>) &#123;</span><br><span class="line">    debug(<span class="string">&quot;Closing connection from &quot;</span> + channel.socket.getRemoteSocketAddress())</span><br><span class="line">    <span class="comment">// 减少 channel 对应地址的连接计数</span></span><br><span class="line">    connectionQuotas.dec(channel.socket.getInetAddress)</span><br><span class="line">    <span class="comment">// 关闭 socket 连接以及 channel 本身, 吞下异常, 也就是说关闭出错不是什么严重错误, 写入日志以供分析就行</span></span><br><span class="line">    <span class="type">CoreUtils</span>.swallow(channel.socket().close(), <span class="keyword">this</span>, <span class="type">Level</span>.<span class="type">ERROR</span>)</span><br><span class="line">    <span class="type">CoreUtils</span>.swallow(channel.close(), <span class="keyword">this</span>, <span class="type">Level</span>.<span class="type">ERROR</span>)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Acceptor-run"><a href="#Acceptor-run" class="headerlink" title="Acceptor.run()"></a>Acceptor.run()</h2><p>由于循环嵌套还是有点深的，先忽略对Channels的处理部分</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</span><br><span class="line">  serverChannel.register(nioSelector, <span class="type">SelectionKey</span>.<span class="type">OP_ACCEPT</span>) <span class="comment">// 注册OP_ACCEPT事件</span></span><br><span class="line">  <span class="comment">// 标识启动完成, 之后 acceptor.awaitStartup() 才会返回, 回顾 createAcceptorAndProcessors()</span></span><br><span class="line">  <span class="comment">// 也就是说 Server 启动时, 必须等到 acceptor 注册 OP_ACCEPT 事件后才会执行后续步骤:</span></span><br><span class="line">  <span class="comment">//   将acceptor加入acceptors, addProcessors, 创建下个acceptor ...</span></span><br><span class="line">  startupComplete()</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> currentProcessor = <span class="number">0</span> <span class="comment">// 记录当前processor的id</span></span><br><span class="line">    <span class="keyword">while</span> (isRunning) &#123;</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 轮询Selector直到有channels准备好I/O, 或者超时(500ms)</span></span><br><span class="line">        <span class="keyword">val</span> ready = nioSelector.select(<span class="number">500</span>)</span><br><span class="line">        <span class="keyword">if</span> (ready &gt; <span class="number">0</span>) &#123;  <span class="comment">// 有ready个channels准备好I/O</span></span><br><span class="line">          <span class="comment">// <span class="doctag">TODO:</span> 处理准备好I/O的channels</span></span><br><span class="line">        &#125;  <span class="comment">// else: ready &lt;= 0</span></span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">catch</span> &#123;</span><br><span class="line">        <span class="comment">// 假设有特定的channel在select时出错, 或者收到bad request, 我们不想要让其他channels受到影响</span></span><br><span class="line">        <span class="comment">// 因此遇到异常只需要打印错误即可。</span></span><br><span class="line">        <span class="comment">// 但是scala会通过ControlThrowable来进行流程控制, 所以此时需要继续将异常往上抛(这是安全的)</span></span><br><span class="line">        <span class="comment">// 在scala 2.13中可以用 case NonFatal(e) 来避免ControlThrowable被捕获</span></span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">ControlThrowable</span> =&gt; <span class="keyword">throw</span> e</span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">&quot;Error occurred&quot;</span>, e)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    <span class="comment">// Acceptor线程结束后的清理工作</span></span><br><span class="line">    debug(<span class="string">&quot;Closing server socket and selector.&quot;</span>)</span><br><span class="line">    <span class="type">CoreUtils</span>.swallow(serverChannel.close(), <span class="keyword">this</span>, <span class="type">Level</span>.<span class="type">ERROR</span>)</span><br><span class="line">    <span class="type">CoreUtils</span>.swallow(nioSelector.close(), <span class="keyword">this</span>, <span class="type">Level</span>.<span class="type">ERROR</span>)</span><br><span class="line">    shutdownComplete()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>外层<code>try-finally</code>块没有<code>catch</code>，也就是说一切异常都在<code>while</code>循环体内进行处理，循环体内则是一个大的<code>try-catch</code>，注意重抛<code>ControlThrowable</code>的手法，可以参考<a target="_blank" rel="noopener" href="https://www.scala-lang.org/api/current/scala/util/control/ControlThrowable.html">Scala 2.13 ControlThrowable</a>和<a target="_blank" rel="noopener" href="https://www.scala-lang.org/api/2.12.10/scala/util/control/ControlThrowable.html">Scala 2.12 ControlThrowable</a>。</p>
+<p><code>Selector</code>的处理和Linux的<code>epoll_wait</code>如出一辙，所以这里还是很熟悉的，不同的是没有处理<code>ready &lt;= 0</code>的情况，接口文档里写的是</p>
+<blockquote>
+<p>@return  The number of keys, possibly zero, whose ready-operation sets were update</p>
+</blockquote>
+<p><code>select()</code>方法不会返回负值，像<code>epoll_wait</code>返回-1的情况，<code>Selector</code>是直接抛出异常了，文档里也写了3种异常：</p>
+<ul>
+<li><code>IOException</code>: If an I&#x2F;O error occurs;</li>
+<li><code>ClosedSelectorException</code>: If this selector is closed;</li>
+<li><code>IllegalArgumentException</code>: If the value of the timeout argument is negative.</li>
+</ul>
+<p>接下来看<code>ready &gt; 0</code>时的代码，也是核心的处理逻辑：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="comment">// 遍历所有的key, 类型为SelectionKey</span></span><br><span class="line">  <span class="keyword">val</span> key = iter.next</span><br><span class="line">  iter.remove() <span class="comment">// 从集合中移除该key, 防止</span></span><br><span class="line">  <span class="keyword">if</span> (key.isAcceptable) &#123;  <span class="comment">// 该key的channel可以接受新的socket连接</span></span><br><span class="line">    <span class="comment">// round robin算法, 将连接均衡分配给计算出的下标对应的processor</span></span><br><span class="line">    <span class="comment">// 比如3个processors, 接收了7个连接, 则分配的processor下标依次为: 0,1,2,0,1,2,0,1</span></span><br><span class="line">    <span class="keyword">val</span> processor = synchronized &#123;</span><br><span class="line">      currentProcessor = currentProcessor % processors.size</span><br><span class="line">      processors(currentProcessor)</span><br><span class="line">    &#125;</span><br><span class="line">    accept(key, processor)</span><br><span class="line">  &#125; <span class="keyword">else</span></span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">&quot;Unrecognized key state for acceptor thread.&quot;</span>)</span><br><span class="line"></span><br><span class="line">  <span class="comment">// round robin算法, 迭代</span></span><br><span class="line">  currentProcessor = currentProcessor + <span class="number">1</span></span><br><span class="line">&#125; <span class="keyword">catch</span> &#123; <span class="comment">// 遍历keys及处理每个key时的异常在此打印</span></span><br><span class="line">  <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">&quot;Error while accepting connection&quot;</span>, e)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>思路很简单，就是用round robin算法简单做下负载均衡，调用<code>accept()</code>方法将key对应的连接分配给指定processor，因此核心其实是<code>accept()</code>方法。</p>
+<p>PS：一个细节，外层<code>catch</code>处理了<code>ControlThrowable</code>，而内层<code>catch</code>并没处理，因为该异常是实现流程控制的，在迭代器到达末尾时才会抛出该异常，所以迭代循环中不会抛出该异常。另一个细节，这里每次迭代都把迭代器移除，这里大概是Java不会像C++一样，对象销毁的时候自动析构吧，而且Jave的<code>Set</code>移除迭代器之后不影响继续遍历。</p>
+<p>看看<code>accept()</code>的实现（删掉了日志语句）：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">accept</span></span>(key: <span class="type">SelectionKey</span>, processor: <span class="type">Processor</span>) &#123;</span><br><span class="line">  <span class="comment">// key.channel()向下转型, 从抽象类 SelectableChannel 转型为派生类 ServerSocketChannel</span></span><br><span class="line">  <span class="keyword">val</span> serverSocketChannel = key.channel().asInstanceOf[<span class="type">ServerSocketChannel</span>]</span><br><span class="line">  <span class="keyword">val</span> socketChannel = serverSocketChannel.accept() <span class="comment">// socket accept, 返回表示连接的 SocketChannel</span></span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="comment">// 将远程地址对应的连接数加1, 如果超过了配置的最大连接数限额, connectionQuotas会抛出 TooManyConnectionsException</span></span><br><span class="line">    connectionQuotas.inc(socketChannel.socket().getInetAddress)</span><br><span class="line">    socketChannel.configureBlocking(<span class="literal">false</span>) <span class="comment">// socket设为非阻塞模式</span></span><br><span class="line">    socketChannel.socket().setTcpNoDelay(<span class="literal">true</span>) <span class="comment">// socket设置TCP_NODELAY选项, 禁止Nagle算法</span></span><br><span class="line">    socketChannel.socket().setKeepAlive(<span class="literal">true</span>) <span class="comment">// socket设置保活模式, 长时间没有发送心跳则发出RST包重置连接</span></span><br><span class="line">    <span class="comment">// 配置的 socket.send.buffer.bytes 不为默认值, 则设置 SO_SNDBUF 选项重置发送缓冲区大小</span></span><br><span class="line">    <span class="keyword">if</span> (sendBufferSize != <span class="type">Selectable</span>.<span class="type">USE_DEFAULT_BUFFER_SIZE</span>)</span><br><span class="line">      socketChannel.socket().setSendBufferSize(sendBufferSize)</span><br><span class="line"></span><br><span class="line">    processor.accept(socketChannel)</span><br><span class="line">  &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> e: <span class="type">TooManyConnectionsException</span> =&gt;</span><br><span class="line">      close(socketChannel)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>跟socket编程里一样的套路，只不过检查了同一个IP的最大连接数是否超限，并且给表示连接的socket设置了一些选项，然后实际上还是调用了<code>Processor.accept()</code>方法：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">accept</span></span>(socketChannel: <span class="type">SocketChannel</span>) &#123;</span><br><span class="line">  newConnections.add(socketChannel)</span><br><span class="line">  wakeup()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里就很简单了，把配置好的<code>SocketChannel</code>给加入<code>Processor</code>内部的并发队列<code>newConnections</code>中，其类型前一篇提过，是<code>ConcurrentLinkedQueue</code>。</p>
+<h2 id="Acceptor-run-总结"><a href="#Acceptor-run-总结" class="headerlink" title="Acceptor.run()总结"></a>Acceptor.run()总结</h2><p>抛开一些程序设计上的细节性知识，其实<code>Acceptor</code>线程的逻辑就是：</p>
+<ol>
+<li>循环，从<code>Selector</code>中等待I&#x2F;O事件就绪；</li>
+<li>遍历所有的I&#x2F;O事件，将<code>isAcceptable</code>的套接字取出，并调用socket的<code>accept()</code>取得新连接；</li>
+<li>检查最大连接数，没超限的话进行一些socket选项配置；</li>
+<li>将配置后的socket存入<code>Processor</code>的内部队列中。</li>
+</ol>
+<p>可以看到<code>Acceptor</code>仅仅做了中介的作用，它是直接和客户端的连接请求打交道的，将成功的连接处理后传递给<code>Processor</code>，这样<code>Processor</code>就可以专心去处理网络数据的读写。</p>
+<p>另一方面，我们可以看到<code>Channel</code>（在这里是<code>SocketChannel</code>类）其实就是对socket句柄的封装。</p>
+<h2 id="Processor-run"><a href="#Processor-run" class="headerlink" title="Processor.run()"></a>Processor.run()</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</span><br><span class="line">  startupComplete()</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">while</span> (isRunning) &#123;</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        configureNewConnections() <span class="comment">// 处理缓存的新连接</span></span><br><span class="line">        processNewResponses() <span class="comment">// 处理缓存的响应</span></span><br><span class="line">        poll() <span class="comment">// 轮询, 从 Selector 中获取准备好I/O的事件</span></span><br><span class="line">        <span class="comment">// 处理已完成的接收/发送以及断开的channels</span></span><br><span class="line">        processCompletedReceives()</span><br><span class="line">        processCompletedSends()</span><br><span class="line">        processDisconnected()</span><br><span class="line">      &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">        <span class="comment">// 这里吞下了所有异常, 因为让 processor 退出对 broker 的影响可能会很大, 但值得商榷的是,</span></span><br><span class="line">        <span class="comment">// 是否存在需要让整个 broker 停止的异常。</span></span><br><span class="line">        <span class="comment">// 通常抛出的异常都是和特定socket或者bad request相关的, 这些异常被捕获, 然后会被独立的方法处理, 因此不会在这里</span></span><br><span class="line">        <span class="comment">// 被捕获, 所以可能这里只会看到 ControlThrowable (仅仅是可见, 没有地方会抛出)</span></span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; processException(<span class="string">&quot;Processor got uncaught exception.&quot;</span>, e)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    <span class="comment">// 将异常信息写入日志(略)</span></span><br><span class="line">    shutdownComplete()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只用照着<code>try</code>作用域内的方法一个个地看下来就行。</p>
+<h3 id="1-configureNewConnections"><a href="#1-configureNewConnections" class="headerlink" title="1. configureNewConnections"></a>1. configureNewConnections</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">configureNewConnections</span></span>() &#123;</span><br><span class="line">  <span class="keyword">while</span> (!newConnections.isEmpty) &#123;</span><br><span class="line">    <span class="comment">// newConnections的SocketChannel依次出队</span></span><br><span class="line">    <span class="keyword">val</span> channel = newConnections.poll()</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">// 调用链: selector.registerChannel =&gt; selector.buildAndAttachKafkaChannel =&gt; channelBuilder.buildChannel()</span></span><br><span class="line">      <span class="comment">// channel 会注册 OP_READ 事件(返回 SelectionKey)到 selector 上, 然后和 connectionId, SelectionKey 一起构造</span></span><br><span class="line">      <span class="comment">// KafkaChannel 对象, 以 connectionId 作为key组成键值对加入 selector.channels 中</span></span><br><span class="line">      selector.register(connectionId(channel.socket), channel)</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="comment">// 捕获所有异常, 关闭 对应的socket防止socket泄漏</span></span><br><span class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</span><br><span class="line">        close(channel)</span><br><span class="line">        <span class="comment">// 将异常信息写入日志(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见<code>Acceptor</code>仅仅将表示连接的<code>SocketChannel</code>交给<code>Processor</code>，而<code>Processor</code>则会为其注册读事件，同时交给<code>selector</code>管理时会将其包装为<code>KafkaChannel</code>，这个包装过程是由<code>ChannelBuilder</code>接口完成的，而接口指向的实际对象是在<code>Processor.createSelector()</code>中<code>ChannelBuilders.serverChannelBuilder()</code>方法创建的，对<code>PLAINTEXT</code>协议，即<code>PlaintextChannelBuilder</code>，其<code>buildChannel()</code>方法的调用和实现依次为：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// id: SocketChannel.connectionId</span></span><br><span class="line"><span class="comment">// key: SocketChannel.register() 返回的 SelectionKey</span></span><br><span class="line"><span class="comment">// maxReceiveSize: config.socketRequestMaxBytes, 即配置&quot;socket.request.max.bytes&quot;</span></span><br><span class="line"><span class="comment">// memoryPool: SocketServer.memoryPool</span></span><br><span class="line"><span class="type">KafkaChannel</span> channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);</span><br><span class="line">key.attach(channel);  <span class="comment">// key原本是attach之前的SocketChannel的, 现在改变attach的对象</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> KafkaChannel <span class="title function_">buildChannel</span><span class="params">(String id, SelectionKey key, <span class="type">int</span> maxReceiveSize, MemoryPool memoryPool)</span> <span class="keyword">throws</span> KafkaException &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="type">PlaintextTransportLayer</span> <span class="variable">transportLayer</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">PlaintextTransportLayer</span>(key);</span><br><span class="line">        <span class="type">PlaintextAuthenticator</span> <span class="variable">authenticator</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">PlaintextAuthenticator</span>(configs, transportLayer);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">KafkaChannel</span>(id, transportLayer, authenticator, maxReceiveSize,</span><br><span class="line">                memoryPool != <span class="literal">null</span> ? memoryPool : MemoryPool.NONE);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        <span class="comment">// 异常处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">PlaintextTransportLayer</span><span class="params">(SelectionKey key)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="built_in">this</span>.key = key;</span><br><span class="line">    <span class="built_in">this</span>.socketChannel = (SocketChannel) key.channel();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以发现<code>key</code>和<code>channel: SocketChannel</code>被存到了<code>KafkaChannel.transportLayer</code>字段中，因此在后面的源码中，给<code>KafkaChannel</code>注册和取消读&#x2F;写事件到<code>Selector</code>上时是使用<code>transportLayer</code>的<code>addInterestOps()</code>和<code>removeInterestOps()</code>方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addInterestOps</span><span class="params">(<span class="type">int</span> ops)</span> &#123;</span><br><span class="line">    key.interestOps(key.interestOps() | ops);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">removeInterestOps</span><span class="params">(<span class="type">int</span> ops)</span> &#123;</span><br><span class="line">    key.interestOps(key.interestOps() &amp; ~ops);</span><br><span class="line">   </span><br></pre></td></tr></table></figure>
+
+<p>其实也就是调用了<code>SelectionKey</code>的<code>interestOps()</code>方法，不过包装了位运算<code>|</code>和<code>&amp;~</code>来表示添加和移除。</p>
+<h3 id="2-processNewResponses"><a href="#2-processNewResponses" class="headerlink" title="2. processNewResponses"></a>2. processNewResponses</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processNewResponses</span></span>() &#123;</span><br><span class="line">  <span class="keyword">var</span> curr: <span class="type">RequestChannel</span>.<span class="type">Response</span> = <span class="literal">null</span></span><br><span class="line">  <span class="keyword">while</span> (&#123;curr = dequeueResponse(); curr != <span class="literal">null</span>&#125;) &#123;</span><br><span class="line">    <span class="comment">// 将响应从 responseQueue 中依次出队, 这里取得 connectionId 作为 channelId</span></span><br><span class="line">    <span class="keyword">val</span> channelId = curr.request.context.connectionId</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">// 根据响应的类型进行不同操作</span></span><br><span class="line">      curr.responseAction <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">NoOpAction</span> =&gt;</span><br><span class="line">          <span class="comment">// 无操作: 无需发送响应给客户端, 因此需要读取更多请求到服务端的socket buffer中</span></span><br><span class="line">          <span class="comment">// 调用链: selector.unmute() =&gt; channel.unmute()</span></span><br><span class="line">          <span class="comment">// 会将 channel 从 selector.explicitlyMutedChannels 中移除,</span></span><br><span class="line">          <span class="comment">// 如果该channel处于连接状态, 会在 channel.transportLayer 注册 OP_READ 事件。</span></span><br><span class="line">          updateRequestMetrics(curr)</span><br><span class="line">          trace(<span class="string">&quot;Socket server received empty response to send, registering for read: &quot;</span> + curr)</span><br><span class="line">          openOrClosingChannel(channelId).foreach(c =&gt; selector.unmute(c.id))</span><br><span class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">SendAction</span> =&gt;</span><br><span class="line">          <span class="comment">// 发送: 调用链为 sendResponse() =&gt; selector.send() =&gt; channel.setSend()</span></span><br><span class="line">          <span class="comment">// 将响应加入 inflightResponses 中, 并在 channel.transportLayer 注册 OP_WRITE 事件</span></span><br><span class="line">          <span class="keyword">val</span> responseSend = curr.responseSend.getOrElse(</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">s&quot;responseSend must be defined for SendAction, response: <span class="subst">$curr</span>&quot;</span>))</span><br><span class="line">          sendResponse(curr, responseSend)</span><br><span class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">CloseConnectionAction</span> =&gt;</span><br><span class="line">          <span class="comment">// 关闭连接： 关闭channel</span></span><br><span class="line">          updateRequestMetrics(curr)</span><br><span class="line">          trace(<span class="string">&quot;Closing socket connection actively according to the response code.&quot;</span>)</span><br><span class="line">          close(channelId)</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="comment">// 将异常信息写入日志(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到，<code>Processor</code>仅仅是对缓存在<code>responseQueue</code>中的响应进行处理，但是从请求到响应的转换并不是它的工作，查找了<code>responseQueue</code>的使用地方，可以看到实际上响应是由<code>RequestChannel.sendResponse()</code>方法发送过来的，更上一层，是<code>KafkaApis.sendResponse()</code>方法调用该方法，因此实际上是<code>KafkaApis</code>（位于<code>kafka.server</code>包内）完成对请求的处理。</p>
+<p>至于<code>updateRequestMetrics()</code>方法和异常处理的部分我们不再关心。</p>
+<h3 id="3-poll"><a href="#3-poll" class="headerlink" title="3. poll"></a>3. poll</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">poll</span></span>() &#123;</span><br><span class="line">  <span class="comment">// 轮询300ms, 会将读取的请求/发送的响应/断开的连接，放入 selector 的 completeReceives/completedSends/disconnected</span></span><br><span class="line">  <span class="keyword">try</span> selector.poll(<span class="number">300</span>)</span><br><span class="line">  <span class="keyword">catch</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> e @ (_: <span class="type">IllegalStateException</span> | _: <span class="type">IOException</span>) =&gt;</span><br><span class="line">      <span class="comment">// 不会重抛异常, 这样这次轮询的所有完成的 sends/receives/connections/disconnections 事件都会被处理</span></span><br><span class="line">      error(<span class="string">s&quot;Processor <span class="subst">$id</span> poll failed due to illegal state or IO exception&quot;</span>)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关键是<code>selector.poll()</code>方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">poll</span><span class="params">(<span class="type">long</span> timeout)</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="keyword">if</span> (timeout &lt; <span class="number">0</span>) <span class="comment">// 检查参数合法性</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalArgumentException</span>(<span class="string">&quot;timeout should be &gt;= 0&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="type">boolean</span> <span class="variable">madeReadProgressLastCall</span> <span class="operator">=</span> madeReadProgressLastPoll;</span><br><span class="line">    clear(); <span class="comment">// 清理前1次 poll() 中设置的一些字段 (理应在此2次 poll() 之间对它们全部进行处理)</span></span><br><span class="line"></span><br><span class="line">    <span class="type">boolean</span> <span class="variable">dataInBuffers</span> <span class="operator">=</span> !keysWithBufferedRead.isEmpty();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 在以下情形时将timeout置为0 (代表已经有一些Channel I/O就绪了, select()会立刻返回)</span></span><br><span class="line">    <span class="comment">// 1. 已经有一些接收数据的 Channel 在上一次 poll() 中读了一些数据;</span></span><br><span class="line">    <span class="comment">// 2. 有可连接但暂为完成连接的 Channels;</span></span><br><span class="line">    <span class="comment">// 3. 上次有 Channel 进行了 read() 操作, 并且 Channel 本身缓存了数据.</span></span><br><span class="line">    <span class="comment">// 最后一种情况比较特殊, 它发生的场景是某些 Channels 有数据在中间缓冲区中但却无法读取(比如因为内存不足)</span></span><br><span class="line">    <span class="keyword">if</span> (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty() || (madeReadProgressLastCall &amp;&amp; dataInBuffers))</span><br><span class="line">        timeout = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 若之前内存池内存耗尽, 而现在又可用了, 将一些因为内存压力而暂时取消读事件的 Channel 重新注册读事件</span></span><br><span class="line">    <span class="keyword">if</span> (!memoryPool.isOutOfMemory() &amp;&amp; outOfMemory) &#123;</span><br><span class="line">        log.trace(<span class="string">&quot;Broker no longer low on memory - unmuting incoming sockets&quot;</span>);</span><br><span class="line">        <span class="keyword">for</span> (KafkaChannel channel : channels.values()) &#123;</span><br><span class="line">            <span class="keyword">if</span> (channel.isInMutableState() &amp;&amp; !explicitlyMutedChannels.contains(channel)) &#123;</span><br><span class="line">                channel.unmute();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        outOfMemory = <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 检查 I/O就绪 的keys, 记录 select() 用时</span></span><br><span class="line">    <span class="type">long</span> <span class="variable">startSelect</span> <span class="operator">=</span> time.nanoseconds();</span><br><span class="line">    <span class="type">int</span> <span class="variable">numReadyKeys</span> <span class="operator">=</span> select(timeout);</span><br><span class="line">    <span class="type">long</span> <span class="variable">endSelect</span> <span class="operator">=</span> time.nanoseconds();</span><br><span class="line">    <span class="built_in">this</span>.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 1. 存在 I/O就绪 的Channels; 2和3 参见之前将 timeout = 0 部分的注释</span></span><br><span class="line">    <span class="keyword">if</span> (numReadyKeys &gt; <span class="number">0</span> || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) &#123;</span><br><span class="line">        Set&lt;SelectionKey&gt; readyKeys = <span class="built_in">this</span>.nioSelector.selectedKeys();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Poll 有缓存数据的 Channels (但不Poll底层socket有缓存数据的Channels)</span></span><br><span class="line">        <span class="keyword">if</span> (dataInBuffers) &#123;</span><br><span class="line">            keysWithBufferedRead.removeAll(readyKeys); <span class="comment">//so no channel gets polled twice</span></span><br><span class="line">            Set&lt;SelectionKey&gt; toPoll = keysWithBufferedRead;</span><br><span class="line">            keysWithBufferedRead = <span class="keyword">new</span> <span class="title class_">HashSet</span>&lt;&gt;(); <span class="comment">//poll() calls will repopulate if needed</span></span><br><span class="line">            pollSelectionKeys(toPoll, <span class="literal">false</span>, endSelect);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Poll 底层 socket 有缓存数据的 Channels</span></span><br><span class="line">        pollSelectionKeys(readyKeys, <span class="literal">false</span>, endSelect);</span><br><span class="line">        readyKeys.clear();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Poll 待连接的 Channels</span></span><br><span class="line">        pollSelectionKeys(immediatelyConnectedKeys, <span class="literal">true</span>, endSelect);</span><br><span class="line">        immediatelyConnectedKeys.clear();</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        madeReadProgressLastPoll = <span class="literal">true</span>; <span class="comment">//no work is also &quot;progress&quot;</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">long</span> <span class="variable">endIo</span> <span class="operator">=</span> time.nanoseconds();</span><br><span class="line">    <span class="built_in">this</span>.sensors.ioTime.record(endIo - endSelect, time.milliseconds());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 利用 select() 结束时刻保证我们不会关闭刚刚传进 pollSelectionKeys() 的连接 (避免将其识别未过期连接)</span></span><br><span class="line">    maybeCloseOldestConnection(endSelect);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 在关闭过期连接后, 将完成接收的 Channels 加入 completedReceives.</span></span><br><span class="line">    addToCompletedReceives();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这部分继续深究的话比较复杂，Kafka在这方面考虑了不少，上述分析中对一些字段也只是简单地提了下，到此为止。总之，最重要的是直到<code>poll()</code>会填充<code>Selector</code>内部维护的<strong>已完成接收</strong>&#x2F;<strong>已完成发送</strong>&#x2F;<strong>已断开</strong>的<code>Channel</code>，以便之后处理。</p>
+<p>PS：在处理完成的发送时，在调用<code>send()</code>向socket写入数据的同时取消监听对应<code>Channel</code>的<code>OP_WRITE</code>事件：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 类 KafkaChannel</span></span><br><span class="line"><span class="comment">// 调用链: Selector.PollSelectionKeys() =&gt; write() =&gt; send()</span></span><br><span class="line"><span class="keyword">private</span> boolean send(<span class="type">Send</span> send) <span class="keyword">throws</span> <span class="type">IOException</span> &#123;</span><br><span class="line">    send.writeTo(transportLayer);</span><br><span class="line">    <span class="keyword">if</span> (send.completed())</span><br><span class="line">        transportLayer.removeInterestOps(<span class="type">SelectionKey</span>.<span class="type">OP_WRITE</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> send.completed();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-processCompletedReceives"><a href="#4-processCompletedReceives" class="headerlink" title="4.  processCompletedReceives"></a>4.  processCompletedReceives</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processCompletedReceives</span></span>() &#123;</span><br><span class="line">  <span class="comment">// 遍历所有完成接收的 NetworkService, 具体实现在 selector.poll() 方法中, 最后会调用 addToCompletedReceives()</span></span><br><span class="line">  <span class="comment">// 如果 channel 不在 explicitlyMutedChannels 中 (即调用了unmute()方法), 则会将 channel 对应的 NetworkService 队列</span></span><br><span class="line">  <span class="comment">// 弹出队首并加入 completedReceives 中。</span></span><br><span class="line"> selector.completedReceives.asScala.foreach &#123; receive =&gt;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">// NetworkServer 的 source 字段记录了连接channel的 connectionId</span></span><br><span class="line">      openOrClosingChannel(receive.source) <span class="keyword">match</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="type">Some</span>(channel) =&gt;</span><br><span class="line">          <span class="comment">// 解析 payload (接收到的ByteBuffer)的头部</span></span><br><span class="line">          <span class="keyword">val</span> header = <span class="type">RequestHeader</span>.parse(receive.payload)</span><br><span class="line">          <span class="comment">// 将其与 channel 的会话层信息封装成 RequestContext</span></span><br><span class="line">          <span class="keyword">val</span> context = <span class="keyword">new</span> <span class="type">RequestContext</span>(header, receive.source, channel.socketAddress,</span><br><span class="line">            channel.principal, listenerName, securityProtocol)</span><br><span class="line">          <span class="comment">// 进一步将上述信息封装成 Request 对象</span></span><br><span class="line">          <span class="keyword">val</span> req = <span class="keyword">new</span> <span class="type">RequestChannel</span>.<span class="type">Request</span>(processor = id, context = context,</span><br><span class="line">            startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)</span><br><span class="line">          <span class="comment">// 这里仅仅是将 req 放入 requestChannel 的内部队列 requestQueue</span></span><br><span class="line">          requestChannel.sendRequest(req)</span><br><span class="line">          <span class="comment">// 取消监听该channel的 OP_READ 事件, 并添加到 explicitlyMutedChannels</span></span><br><span class="line">          selector.mute(receive.source)</span><br><span class="line">        <span class="keyword">case</span> <span class="type">None</span> =&gt;</span><br><span class="line">          <span class="comment">// 抛出异常(略)</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="comment">// 异常处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-processCompleteSends"><a href="#4-processCompleteSends" class="headerlink" title="4. processCompleteSends"></a>4. processCompleteSends</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processCompletedSends</span></span>() &#123;</span><br><span class="line">  <span class="comment">// 遍历所有完成发送的 NetworkService, 具体实现在 selector.poll() 方法中</span></span><br><span class="line">  selector.completedSends.asScala.foreach &#123; send =&gt;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">// 将该网络地址的响应从 inflightResponses 中移除</span></span><br><span class="line">      <span class="keyword">val</span> resp = inflightResponses.remove(send.destination).getOrElse &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">s&quot;Send for <span class="subst">$&#123;send.destination&#125;</span> completed, but not in `inflightResponses`&quot;</span>)</span><br><span class="line">      &#125;</span><br><span class="line">      updateRequestMetrics(resp)</span><br><span class="line">      <span class="comment">// 将对应的 channel 从 explicitlyMutedChannels 中移除, 并且如果未断开连接, 则注册 OP_READ 事件</span></span><br><span class="line">      selector.unmute(send.destination)</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="comment">// 异常处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-processDisconnected"><a href="#5-processDisconnected" class="headerlink" title="5. processDisconnected"></a>5. processDisconnected</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processDisconnected</span></span>() &#123;</span><br><span class="line">  <span class="comment">// 遍历所有断开连接的channel的 connectionId, 具体实现在 selector.poll() 方法中</span></span><br><span class="line">  selector.disconnected.keySet.asScala.foreach &#123; connectionId =&gt;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="comment">// 从 connectionId 中取得网络地址信息</span></span><br><span class="line">      <span class="keyword">val</span> remoteHost = <span class="type">ConnectionId</span>.fromString(connectionId).getOrElse &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">s&quot;connectionId has unexpected format: <span class="subst">$connectionId</span>&quot;</span>)</span><br><span class="line">      &#125;.remoteHost</span><br><span class="line">      <span class="comment">// 将断开连接的网络地址的响应从 inflightResponses 中移除</span></span><br><span class="line">      inflightResponses.remove(connectionId).foreach(updateRequestMetrics)</span><br><span class="line">      <span class="comment">// the channel has been closed by the selector but the quotas still need to be updated</span></span><br><span class="line">      <span class="comment">// 更新 quotas 的信息, 即将该网络地址上的连接数减1</span></span><br><span class="line">      connectionQuotas.dec(<span class="type">InetAddress</span>.getByName(remoteHost))</span><br><span class="line">    &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="comment">// 异常处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Processor-run-总结"><a href="#Processor-run-总结" class="headerlink" title="Processor.run()总结"></a>Processor.run()总结</h2><p><code>Processor</code>使用了Kafka自己实现的<code>Selector</code>（别名为<code>KSelector</code>），比<code>Acceptor</code>使用的NIO默认的<code>Selector</code>（别名为<code>NSelector</code>）有更多的功能，因为<code>Processor</code>要维护监听socket的读&#x2F;写事件状态，即<code>OP_READ</code>和<code>OP_WRITE</code>。</p>
+<p>一些具体的实现在<code>org.apache.kafka.common</code>的<code>network</code>包和<code>request</code>包中（Java实现），这里暂时不细看。</p>
+<p>归结其流程为：</p>
+<ol>
+<li>从将<code>Acceptor</code>收到的新连接全部注册<code>OP_READ</code>事件，因为Kafka服务端不主动向客户端发送请求，只被动响应客户端的请求；</li>
+<li>根据响应类型处理缓存的响应：<code>NoOpAction</code>&#x3D;&gt;重新注册<code>Channel</code>的读事件，<code>SendAction</code>&#x3D;&gt;注册<code>Channel</code>的写事件，将响应缓存，并交由<code>RequestChannel</code>发送，<code>CloseConnectionAction</code>&#x3D;&gt;关闭<code>Channel</code>；</li>
+<li>轮询<code>Selector</code>得到就绪的I&#x2F;O事件（可读&#x2F;可写&#x2F;断开）；</li>
+<li>对所有完成接收的数据（请求），封装后给<code>RequestChannel</code>发送；</li>
+<li>对所有完成发送的数据（响应），从缓存中移除，并重新监听对应<code>Channel</code>的读事件；</li>
+<li>对所有断开的连接，更新<code>connectionQuotas</code>维护的网络地址&#x3D;&gt;连接数的映射。</li>
+</ol>
+<p><code>Processor</code>本身只是做完成读&#x2F;写&#x2F;断开三种事件的处理，发送和接收实际上都是通过<code>RequestChannel</code>。至于<code>Processor</code>是由<code>SocketServer.newProcessor()</code>方法创建的，其内部的<code>requestChannel</code>字段就是<code>SocketServer</code>的同名字段。</p>
+<p>因此，接下来就是阅读<code>RequestChannel</code>。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/09/18/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB01-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84%E5%90%AF%E5%8A%A8/" rel="prev" title="Kafka源码阅读01: 网络层阅读之服务器的启动">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读01: 网络层阅读之服务器的启动
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/09/23/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB03-%E7%BD%91%E7%BB%9C%E5%B1%82%E9%98%85%E8%AF%BB%E4%B9%8BRequestChannel/" rel="next" title="Kafka源码阅读03: 网络层阅读之RequestChannel">
+      Kafka源码阅读03: 网络层阅读之RequestChannel <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#AbstractServerThread"><span class="nav-number">1.</span> <span class="nav-text">AbstractServerThread</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Acceptor-run"><span class="nav-number">2.</span> <span class="nav-text">Acceptor.run()</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Acceptor-run-%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">Acceptor.run()总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Processor-run"><span class="nav-number">4.</span> <span class="nav-text">Processor.run()</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-configureNewConnections"><span class="nav-number">4.1.</span> <span class="nav-text">1. configureNewConnections</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-processNewResponses"><span class="nav-number">4.2.</span> <span class="nav-text">2. processNewResponses</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-poll"><span class="nav-number">4.3.</span> <span class="nav-text">3. poll</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-processCompletedReceives"><span class="nav-number">4.4.</span> <span class="nav-text">4.  processCompletedReceives</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-processCompleteSends"><span class="nav-number">4.5.</span> <span class="nav-text">4. processCompleteSends</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-processDisconnected"><span class="nav-number">4.6.</span> <span class="nav-text">5. processDisconnected</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Processor-run-%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">Processor.run()总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

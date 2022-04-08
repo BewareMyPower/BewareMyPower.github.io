@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 前言上次在 Github 上面写博客都是大半年前了，这段时间一直相对较忙，没抽出时间来认真写博客，大多只是一些零散的笔记记录在个人的有道云笔记上，这次姑且尝试继续写博客。 在之前的博客 Java CompletableFuture 学习 中，我们了解了 CompletableFuture 用于异步编程的基本套路：  使用 supplyAsync 在 ExecutorService 中启">
+<meta property="og:type" content="article">
+<meta property="og:title" content="再探 CompletableFuture">
+<meta property="og:url" content="http://yoursite.com/2021/05/09/%E5%86%8D%E6%8E%A2-CompletableFuture/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 前言上次在 Github 上面写博客都是大半年前了，这段时间一直相对较忙，没抽出时间来认真写博客，大多只是一些零散的笔记记录在个人的有道云笔记上，这次姑且尝试继续写博客。 在之前的博客 Java CompletableFuture 学习 中，我们了解了 CompletableFuture 用于异步编程的基本套路：  使用 supplyAsync 在 ExecutorService 中启">
+<meta property="og:locale">
+<meta property="article:published_time" content="2021-05-08T16:58:55.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.233Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2021/05/09/%E5%86%8D%E6%8E%A2-CompletableFuture/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>再探 CompletableFuture | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2021/05/09/%E5%86%8D%E6%8E%A2-CompletableFuture/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          再探 CompletableFuture
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2021-05-09 00:58:55" itemprop="dateCreated datePublished" datetime="2021-05-09T00:58:55+08:00">2021-05-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>上次在 Github 上面写博客都是大半年前了，这段时间一直相对较忙，没抽出时间来认真写博客，大多只是一些零散的笔记记录在个人的有道云笔记上，这次姑且尝试继续写博客。</p>
+<p>在之前的博客 <a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2020/10/07/Java-CompletableFuture-%E5%AD%A6%E4%B9%A0/">Java CompletableFuture 学习</a> 中，我们了解了 <code>CompletableFuture</code> 用于异步编程的基本套路：</p>
+<ul>
+<li>使用 <code>supplyAsync</code> 在 <code>ExecutorService</code> 中启动异步任务并返回 future</li>
+<li>使用 <code>thenApply</code> &#x2F; <code>thenCompose</code> &#x2F; <code>exceptionally</code> 方法进行 future 之间的链式映射</li>
+<li>使用 <code>whenComplete</code> 方法来指定异步任务完成时的回调</li>
+</ul>
+<p>然而在这段时间阅读 <a target="_blank" rel="noopener" href="https://github.com/apache/pulsar">Pulsar</a> 和 <a target="_blank" rel="noopener" href="https://github.com/streamnative/kop">KoP</a> 的源码过程中，发现其实对 <code>CompletableFuture</code> 的使用还是存在一些误区的，本文将个人的一些经验整合一下。</p>
+<p>本文的示例从一个简单的例子开始（其中 <code>print</code> 方法会在后文中复用）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">print</span><span class="params">(<span class="keyword">final</span> String msg)</span> &#123;</span><br><span class="line">    System.out.println(Thread.currentThread().getName() + <span class="string">&quot; &quot;</span> + msg);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> ExecutionException, InterruptedException &#123;</span><br><span class="line">    <span class="keyword">final</span> CompletableFuture&lt;Integer&gt; intFuture = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">        print(<span class="string">&quot;in supplyAsync()&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">    print(<span class="string">&quot;intFuture returns: &quot;</span> + intFuture.get());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 in supplyAsync()</span><br><span class="line">main intFuture returns: 0</span><br></pre></td></tr></table></figure>
+
+<p>可见 <code>supplyAsync</code> 默认用的是 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ForkJoinPool.html"><code>ForkJoinPool</code></a> 这个 Java 线程池。由于本人是半路出家的 Javaer，这里先记下这个知识点，之后再系统学习下。</p>
+<h2 id="thenApply-x2F-exceptionally-vs-whenComplete"><a href="#thenApply-x2F-exceptionally-vs-whenComplete" class="headerlink" title="thenApply&#x2F;exceptionally vs. whenComplete"></a>thenApply&#x2F;exceptionally vs. whenComplete</h2><h3 id="针对不会异常完成的-future"><a href="#针对不会异常完成的-future" class="headerlink" title="针对不会异常完成的 future"></a>针对不会异常完成的 future</h3><p>这个其实很多人都用错了使用场景，因为大多数时候，其实我们只是想给 future 加一个回调，并不想继续链式调用。其实这种简单场景下，<code>whenComplete</code> 才是应该用的。比如，我们想对奇数进行操作，偶数则抛出异常，可以是：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; firstFuture = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">int</span> <span class="variable">x</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>().nextInt();</span><br><span class="line">    print(<span class="string">&quot;in firstFuture, x = &quot;</span> + x);</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;);</span><br><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; secondFuture = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">firstFuture.whenComplete((integer, throwable) -&gt; &#123;</span><br><span class="line">    <span class="keyword">assert</span> throwable != <span class="literal">null</span>;</span><br><span class="line">    print(<span class="string">&quot;in secondFuture, firstFuture returns &quot;</span> + integer);</span><br><span class="line">    <span class="keyword">if</span> (integer % <span class="number">2</span> != <span class="number">0</span>) &#123;</span><br><span class="line">        secondFuture.complete(integer / <span class="number">2</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        secondFuture.completeExceptionally(<span class="keyword">new</span> <span class="title class_">Exception</span>(<span class="string">&quot;firstFuture returns an even number: &quot;</span> + integer));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    print(<span class="string">&quot;secondFuture returns: &quot;</span> + secondFuture.get());</span><br><span class="line">&#125; <span class="keyword">catch</span> (ExecutionException e) &#123;</span><br><span class="line">    print(<span class="string">&quot;secondFuture failed: &quot;</span> + e.getCause());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以下是两种典型输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 in firstFuture, x = -1634409183</span><br><span class="line">main in secondFuture, firstFuture returns -1634409183</span><br><span class="line">main secondFuture returns: -817204591</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 in firstFuture, x = 1243845674</span><br><span class="line">main in secondFuture, firstFuture returns 1243845674</span><br><span class="line">main secondFuture failed: java.lang.Exception: firstFuture returns an even number: 1243845674</span><br></pre></td></tr></table></figure>
+
+<p>这里我们可以先留意一下，<code>firstFuture</code> 的 <code>whenComplete</code> 方法是在主线程内执行的。</p>
+<p>但实际上由于 <code>firstFuture</code> 永远不会异常结束，因此这个时候其实可以简化 <code>secondFuture</code> 的构造为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; secondFuture = firstFuture.thenApply(integer -&gt; &#123;</span><br><span class="line">    print(<span class="string">&quot;in secondFuture, firstFuture returns &quot;</span> + integer);</span><br><span class="line">    <span class="keyword">if</span> (integer % <span class="number">2</span> != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> integer / <span class="number">2</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// 注意 thenApply 内部只能抛出 unchecked exception</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;firstFuture returns an even number: &quot;</span> + integer);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>此时两者本质上是一样的，但是 <code>thenApply</code> 更简洁。而且其实可以将上述代码简化为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; future = CompletableFuture.supplyAsync(<span class="comment">/* ... */</span>).thenApply(<span class="comment">/* ... */</span>);</span><br></pre></td></tr></table></figure>
+
+<h3 id="针对可能异常完成的-future"><a href="#针对可能异常完成的-future" class="headerlink" title="针对可能异常完成的 future"></a>针对可能异常完成的 future</h3><p>TL; DR 使用 <code>whenComplete</code> 就是最好的，不要链式使用 <code>thenApply</code> 和 <code>exceptionally</code>。 </p>
+<p>假如 <code>firstFuture</code> 就在偶数的时候抛出异常：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; firstFuture = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">int</span> <span class="variable">x</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>().nextInt();</span><br><span class="line">    print(<span class="string">&quot;in firstFuture, x = &quot;</span> + x);</span><br><span class="line">    <span class="keyword">if</span> (x % <span class="number">2</span> != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> x;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;firstFuture returns an even number: &quot;</span> + x);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>那么基于 <code>whenComplete</code> 实现的 <code>secondFuture</code> 变成了：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; secondFuture = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">print(<span class="string">&quot;in secondFuture, firstFuture returns &quot;</span> + integer);</span><br><span class="line">firstFuture.whenComplete((integer, throwable) -&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> (throwable != <span class="literal">null</span>) &#123;</span><br><span class="line">        secondFuture.completeExceptionally(throwable);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        secondFuture.complete(integer / <span class="number">2</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>这个实现和上一节的是等价的。但此时，如果基于 <code>thenApply</code>，很多人会进一步用 <code>exceptionally</code> 进行两层链式调用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; secondFuture = firstFuture.thenApply(integer -&gt; &#123;</span><br><span class="line">    print(<span class="string">&quot;in secondFuture thenApply, x = &quot;</span> + integer);</span><br><span class="line">    <span class="keyword">return</span> integer;</span><br><span class="line">&#125;).exceptionally(e -&gt; &#123;</span><br><span class="line">    print(<span class="string">&quot;in secondFuture exception: &quot;</span> + e);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>注意，这其实是错误的实现，并且和基于 <code>whenComplete</code> 的实现不是等价的。原因在于 <code>exceptionally</code>，注意我们返回的是 <code>null</code>，因此 <code>secondFuture</code> 在 <code>firstFuture</code> 异常完成时，是返回 null 而非异常完成。</p>
+<p>比如下面这组 <code>firstFuture</code> 异常完成时的输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 in firstFuture, x = 784152994</span><br><span class="line">main in secondFuture exception: java.util.concurrent.CompletionException: java.lang.RuntimeException: firstFuture returns an even number: 784152994</span><br><span class="line">main secondFuture returns: null</span><br></pre></td></tr></table></figure>
+
+<p>这里有两个重点：</p>
+<ol>
+<li><code>secondFuture</code> 是以 null 正常完成（而不是继续以 <code>firstFuture</code> 的异常正常完成）；</li>
+<li><code>exceptionally</code> 的 <code>e</code> 的类型不是 <code>RuntimeException</code>，而是 <code>CompletionException</code>，它的 cause 才是 <code>RuntimeException</code>。</li>
+</ol>
+<p>第一点我们刚才提到了，是 <code>return null</code> 导致的，第二点则尤为致命。之前 Pulsar 这边有个问题是，大量的 HTTP 处理的错误码都是 500 internal error，而不是正确的错误码，原因就在于大量处理都是这样的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Object&gt; future = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">asyncDoSomething()</span><br><span class="line">    .thenApply(result -&gt; future.complete(result))</span><br><span class="line">    .exceptionally(e -&gt; &#123;</span><br><span class="line">        future.completeExceptionally(e);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;;</span><br></pre></td></tr></table></figure>
+
+<p>而在之后处理 <code>future</code> 的异常时，直接把 <code>e</code> 当成 <code>e.getCause()</code> 的类型来使用了。</p>
+<h2 id="thenApply-的实现"><a href="#thenApply-的实现" class="headerlink" title="thenApply 的实现"></a>thenApply 的实现</h2><p>造成上一节里 <code>exceptionally</code> 的 <code>e</code> 不再是最初 future 的异常，而是包裹后的 <code>CompletionException</code> 的原因其实很简单，那就是某个 <code>CompletableFuture</code> 调用 <code>thenApply</code> 返回后的 <code>CompletableFuture</code>，已经不是它自己了。这里我们简单看下源码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CompletableFuture</span>&lt;T&gt; <span class="keyword">implements</span> <span class="title class_">Future</span>&lt;T&gt;, CompletionStage&lt;T&gt; &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> &lt;U&gt; CompletableFuture&lt;U&gt; <span class="title function_">thenApply</span><span class="params">(</span></span><br><span class="line"><span class="params">        Function&lt;? <span class="built_in">super</span> T,? extends U&gt; fn)</span> &#123;</span><br><span class="line">        <span class="comment">// 这里 fn 即我们传入的 lambda 表达式，接收 T 类型的参数，返回 U 类型</span></span><br><span class="line">        <span class="keyword">return</span> uniApplyStage(<span class="literal">null</span>, fn);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意 <code>thenApply</code> 其实是将 <code>CompletableFuture&lt;T&gt;</code> 映射到 <code>CompletableFuture&lt;U&gt;</code> 的，因此很显然前后两个 future 类型不一样。那为什么不继续传播前一个 future 的异常呢？继续看下去。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> &lt;V&gt; CompletableFuture&lt;V&gt; <span class="title function_">uniApplyStage</span><span class="params">(</span></span><br><span class="line"><span class="params">    Executor e, Function&lt;? <span class="built_in">super</span> T,? extends V&gt; f)</span> &#123;</span><br><span class="line">    <span class="comment">// f 即用户传入的 T -&gt; U 的 lambda 表达式，这里泛型参数是 V 而不是 U</span></span><br><span class="line">    <span class="keyword">if</span> (f == <span class="literal">null</span>) <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">NullPointerException</span>();</span><br><span class="line">    CompletableFuture&lt;V&gt; d =  <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;V&gt;();</span><br><span class="line">    <span class="comment">// 注意这里的 e 是 Executor 对象，而不是异常，因为 f 并没有执行</span></span><br><span class="line">    <span class="keyword">if</span> (e != <span class="literal">null</span> || !d.uniApply(<span class="built_in">this</span>, f, <span class="literal">null</span>)) &#123;</span><br><span class="line">        UniApply&lt;T,V&gt; c = <span class="keyword">new</span> <span class="title class_">UniApply</span>&lt;T,V&gt;(e, d, <span class="built_in">this</span>, f);</span><br><span class="line">        push(c);</span><br><span class="line">        c.tryFire(SYNC); <span class="comment">// SYNC 是常量 0</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> d;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>构造了 <code>UniApply</code> 对象，然后调用了 <code>tryFire</code> 方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;V&gt; <span class="title function_">tryFire</span><span class="params">(<span class="type">int</span> mode)</span> &#123;</span><br><span class="line">    CompletableFuture&lt;V&gt; d; CompletableFuture&lt;T&gt; a;</span><br><span class="line">    <span class="keyword">if</span> ((d = dep) == <span class="literal">null</span> ||</span><br><span class="line">        !d.uniApply(a = src, fn, mode &gt; <span class="number">0</span> ? <span class="literal">null</span> : <span class="built_in">this</span>))</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    dep = <span class="literal">null</span>; src = <span class="literal">null</span>; fn = <span class="literal">null</span>;</span><br><span class="line">    <span class="keyword">return</span> d.postFire(a, mode);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对返回的 future <code>d</code> 调用了 <code>uniApply</code> 方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> &lt;S&gt; <span class="type">boolean</span> <span class="title function_">uniApply</span><span class="params">(CompletableFuture&lt;S&gt; a,</span></span><br><span class="line"><span class="params">                           Function&lt;? <span class="built_in">super</span> S,? extends T&gt; f,</span></span><br><span class="line"><span class="params">                           UniApply&lt;S,T&gt; c)</span> &#123;</span><br><span class="line">    Object r; Throwable x;</span><br><span class="line">    <span class="keyword">if</span> (a == <span class="literal">null</span> || (r = a.result) == <span class="literal">null</span> || f == <span class="literal">null</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    tryComplete: <span class="keyword">if</span> (result == <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (r <span class="keyword">instanceof</span> AltResult) &#123;</span><br><span class="line">            <span class="comment">/* ... */</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (c != <span class="literal">null</span> &amp;&amp; !c.claim())</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">            <span class="meta">@SuppressWarnings(&quot;unchecked&quot;)</span> <span class="type">S</span> <span class="variable">s</span> <span class="operator">=</span> (S) r;</span><br><span class="line">            <span class="comment">// 注意，在这里执行我们传入的 lambda 表达式 f</span></span><br><span class="line">            completeValue(f.apply(s));</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Throwable ex) &#123;</span><br><span class="line">            <span class="comment">// 如果抛出异常，则调用 `completeThrowable` 方法</span></span><br><span class="line">            completeThrowable(ex);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>终于看到捕获异常的位置了，最后我们只需要看看 <code>completeThrowable</code> 做了什么。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> AltResult <span class="title function_">encodeThrowable</span><span class="params">(Throwable x)</span> &#123;</span><br><span class="line">    <span class="comment">// 用 x 作为 cause 构造 CompletionException，这里还进行了类型判断避免 CompletionException 嵌套</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">AltResult</span>((x <span class="keyword">instanceof</span> CompletionException) ? x :</span><br><span class="line">                         <span class="keyword">new</span> <span class="title class_">CompletionException</span>(x));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">final</span> <span class="type">boolean</span> <span class="title function_">completeThrowable</span><span class="params">(Throwable x)</span> &#123;</span><br><span class="line">    <span class="comment">// 使用 native CAS 方法将偏移量 RESULT 对应的字段（其实就是 result）设置为 encodeThrowable(x)，如果 result 之前是 null</span></span><br><span class="line">    <span class="keyword">return</span> UNSAFE.compareAndSwapObject(<span class="built_in">this</span>, RESULT, <span class="literal">null</span>,</span><br><span class="line">                                       encodeThrowable(x));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>至此，我们知道为什么 <code>thenApply</code> 返回的 future 若异常完成，其异常是 <code>CompletionException</code> 而非原来的 future 的异常了。这里多说一句，设置的 <code>result</code> 字段为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">volatile</span> Object result;       <span class="comment">// Either the result or boxed AltResult</span></span><br></pre></td></tr></table></figure>
+
+<p>也就是 <code>get()</code> &#x2F; <code>getNow()</code> 等方法会尝试返回的字段。进一步的代码阅读就不继续了，总之，我们已经知道了，并且知道为什么，将 <code>thenApply</code> 和 <code>exceptionally</code> 结合起来并不是一种合适的取代 <code>whenComplete</code> 的方法。</p>
+<p>虽然我们一般用 <code>thenApply</code> 的返回值比较多，但实际上 <code>exceptionally</code> 和 <code>whenComplete</code> 也有返回值。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> CompletableFuture&lt;T&gt; <span class="title function_">exceptionally</span><span class="params">(</span></span><br><span class="line"><span class="params">    Function&lt;Throwable, ? extends T&gt; fn)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> uniExceptionallyStage(fn);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> CompletableFuture&lt;T&gt; <span class="title function_">whenComplete</span><span class="params">(</span></span><br><span class="line"><span class="params">    BiConsumer&lt;? <span class="built_in">super</span> T, ? <span class="built_in">super</span> Throwable&gt; action)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> uniWhenCompleteStage(<span class="literal">null</span>, action);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>初学者一个常见的使用错误或困惑是，在 <code>exceptionally</code> 末尾忘记去 <code>return null</code>，因为在 <code>whenComplete</code> 里不用 <code>return</code>。从方法签名就能看出来，原因是 <code>exceptionally</code> 接收的是 <code>(Throwable) -&gt; T</code> 的函数，而 <code>whenComplete</code> 接收的是 <code>(T, Throwable) -&gt; void</code> 的函数，没有返回值。而由于 <code>exceptionally</code> 接收的参数里没有 <code>T</code> 类型，因此只能返回一个常量，绝大多时候就是 null 了。</p>
+<p>当然，它们返回的虽然和当前 future 对象是一个类型： <code>CompletableFuture&lt;T&gt;</code>，但实际上已经不是一个对象了。依然是举个例子：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="type">int</span> <span class="variable">x</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>().nextInt();</span><br><span class="line">    print(<span class="string">&quot;supplyAsync, x = &quot;</span> + x);</span><br><span class="line">    <span class="keyword">if</span> (x % <span class="number">2</span> != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> x;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;firstFuture returns an even number: &quot;</span> + x);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;).whenComplete((integer, throwable) -&gt; &#123;</span><br><span class="line">    print(<span class="string">&quot;whenComplete integer=&quot;</span> + integer + <span class="string">&quot;, throwable=&quot;</span> + throwable);</span><br><span class="line">&#125;).get();</span><br></pre></td></tr></table></figure>
+
+<p>两个示例输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 supplyAsync, x = 1489321475</span><br><span class="line">main whenComplete integer=1489321475, throwable=null</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 supplyAsync, x = -1124011744</span><br><span class="line">main whenComplete integer=null, throwable=java.util.concurrent.CompletionException: java.lang.RuntimeException: firstFuture returns an even number: -1124011744</span><br></pre></td></tr></table></figure>
+
+<p>我们可以注意到由于 <code>get()</code> 方法是 <code>whenComplete</code> 返回的 future 而不是原来的 future 调用的，抛出异常时，也是 <code>CompletionException</code>，其中的 cause 才是真正的异常。这里就不去看源码了，其实可以猜到，处理和 <code>thenApply</code> 是类似的。</p>
+<h2 id="getNow-vs-thenApply-x2F-whenComplete"><a href="#getNow-vs-thenApply-x2F-whenComplete" class="headerlink" title="getNow vs. thenApply&#x2F;whenComplete"></a>getNow vs. thenApply&#x2F;whenComplete</h2><p>有一些场景是，判断当前 future 是否已经完成，若完成则直接处理结果，否则加入队列等待。亦或者，是用 <code>CompletableFuture.all</code> 来等待多个 future 结束时再做处理，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">sleep</span><span class="params">(<span class="type">long</span> millis)</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        Thread.sleep(millis);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (InterruptedException ignored) &#123;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; future1 = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    sleep(<span class="number">1000</span>);</span><br><span class="line">    print(<span class="string">&quot;future1 returns&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;);</span><br><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Integer&gt; future2 = CompletableFuture.supplyAsync(() -&gt; &#123;</span><br><span class="line">    sleep(<span class="number">1200</span>);</span><br><span class="line">    print(<span class="string">&quot;future2 returns&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">2</span>;</span><br><span class="line">&#125;);</span><br><span class="line"><span class="comment">// allOf 返回的是 CompletableFuture&lt;Void&gt;，而非 Scala 里 Future.sequence 那样返回一个 List 的 future</span></span><br><span class="line">CompletableFuture.allOf(future1, future2).get();</span><br><span class="line">print(future1.getNow(<span class="literal">null</span>) + <span class="string">&quot;, &quot;</span> + future2.getNow(<span class="literal">null</span>));</span><br></pre></td></tr></table></figure>
+
+<p>示例输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 future1 returns</span><br><span class="line">ForkJoinPool.commonPool-worker-2 future2 returns</span><br><span class="line">main 1, 2</span><br></pre></td></tr></table></figure>
+
+<p>这里我们用的 <code>getNow</code>，实际上用 <code>get</code> 方法也一样，因为此时 future 已经完成了，<code>get</code> 会立刻返回。但由于 <code>get</code> 的方法签名中包含 checked exception，因此需要你捕获。</p>
+<p>实际上 <code>getNow</code> 从表达上也不太好，因为 future 已经完成，这个默认值 null 其实是多余的。从语义表达的角度，在这里不对 <code>getNow(null)</code> 的返回值进行 null 检查的话，就得在注释中写明此时保证 future 已经完成。但实际上有可能前面 <code>allOf</code> 写错了，比如写漏了一个 future，导致其实有的 future 在这里是并没有完成的，那么排查问题就变得麻烦。</p>
+<p>有时候在这里也会选择 <code>join</code> 方法，它和 <code>get</code> 的不同在于，future 异常完成时，它抛出的是 unchecked exception，这样就不需要捕获。</p>
+<p>但实际上其实也可以用 <code>thenApply</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">future1.thenApply(result1 -&gt; &#123;</span><br><span class="line">    future2.thenApply(result2 -&gt; &#123;</span><br><span class="line">        print(result1 + <span class="string">&quot;, &quot;</span> + result2);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>虽然在这里略显麻烦，并且出现了 future 嵌套。但其实反而这种嵌套从表达上更好，因为这里我们的处理，result2 是依赖于 result1 的，这种嵌套表达了依赖关系。</p>
+<p>另外，对于已经完成的 future，<code>thenApply</code> 的处理全部是在主线程进行的。同理，<code>whenComplete</code> 也是。因此假如我们在对一个已经完成的 future 进行处理时，可以直接用 <code>whenComplete</code>。</p>
+<p>现在来看看另一个场景，那就是在 future 完成之前这么做会怎样？</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CompletableFuture&lt;Void&gt; future = <span class="keyword">new</span> <span class="title class_">CompletableFuture</span>&lt;&gt;();</span><br><span class="line">future1.thenApply(result1 -&gt; &#123;</span><br><span class="line">    print(<span class="string">&quot;result1: &quot;</span> + result1);</span><br><span class="line">    future2.thenApply(result2 -&gt; &#123;</span><br><span class="line">        print(result1 + <span class="string">&quot;, &quot;</span> + result2);</span><br><span class="line">        future.complete(<span class="literal">null</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br><span class="line">future.get();</span><br></pre></td></tr></table></figure>
+
+<p>示例输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-9 future1 returns</span><br><span class="line">ForkJoinPool.commonPool-worker-9 result1: 1</span><br><span class="line">ForkJoinPool.commonPool-worker-2 future2 returns</span><br><span class="line">ForkJoinPool.commonPool-worker-2 1, 2</span><br></pre></td></tr></table></figure>
+
+<p>可见每个 future 的回调都是接着当前 future 所在线程的。然而，假如我们调整一下，让 future2 只 sleep 200 ms（也就是说 future2 在 future1 之前完成），输出变成了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ForkJoinPool.commonPool-worker-2 future2 returns</span><br><span class="line">ForkJoinPool.commonPool-worker-9 future1 returns</span><br><span class="line">ForkJoinPool.commonPool-worker-9 result1: 1</span><br><span class="line">ForkJoinPool.commonPool-worker-9 1, 2</span><br></pre></td></tr></table></figure>
+
+<p>一个显著变化是，future2 的回调不再是在 future2 所在线程执行，而是在 future1 所在线程执行。原因其实和刚才的一样，在 future1 回调中去给 future2 再注册新的回调时，future2 已经完成了，因此 future2 的回调直接在 <strong>当前线程</strong> 执行。其实这个原理在前面贴的代码中 <code>uniApply</code> 中实现的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> &lt;S&gt; <span class="type">boolean</span> <span class="title function_">uniApply</span><span class="params">(CompletableFuture&lt;S&gt; a,</span></span><br><span class="line"><span class="params">                           Function&lt;? <span class="built_in">super</span> S,? extends T&gt; f,</span></span><br><span class="line"><span class="params">                           UniApply&lt;S,T&gt; c)</span> &#123;</span><br><span class="line">    Object r; Throwable x;</span><br><span class="line">    <span class="comment">// 如果当前 future 未完成，a.result 则为 null，此时 uniApply 会返回 false，f 被加入队列</span></span><br><span class="line">    <span class="keyword">if</span> (a == <span class="literal">null</span> || (r = a.result) == <span class="literal">null</span> || f == <span class="literal">null</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    <span class="comment">// 如果 a.result != null，则后面会调用 completeValue 执行 f.apply，这里就不重复贴代码了</span></span><br></pre></td></tr></table></figure>
+
+<p>至此可见使用 <code>thenApply</code> 注册回调，比起 <code>getNow</code> 等方法更灵活，而且在 future 已经完成的场景下，两者其实是等价的，前者并不会带来更多的开销。当然，从代码简洁性的角度，有时候用 <code>getNow(null)</code> 其实还是可以的，取决于个人。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要探讨了两个方面，一个是设置回调时结合 <code>thenApply</code> 和 <code>exceptionally</code> 和直接使用 <code>whenComplete</code> 的对比，另一个是对于 future 已经完成的场合，<code>thenApply</code> 的使用。此外，还附带着看了下 <code>thenApply</code> 的实现。总的来说，<code>CompletableFuture</code> 这个基础设施还是简单易用，但还是有一些细节需要注意才能写出更好的代码。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/10/08/Pulsar-Protocol-Handler/" rel="prev" title="Pulsar Protocol Handler">
+      <i class="fa fa-chevron-left"></i> Pulsar Protocol Handler
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/08/21/Netty-and-NIO-buffer/" rel="next" title="Netty-and-NIO-buffer">
+      Netty-and-NIO-buffer <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#thenApply-x2F-exceptionally-vs-whenComplete"><span class="nav-number">2.</span> <span class="nav-text">thenApply&#x2F;exceptionally vs. whenComplete</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%92%88%E5%AF%B9%E4%B8%8D%E4%BC%9A%E5%BC%82%E5%B8%B8%E5%AE%8C%E6%88%90%E7%9A%84-future"><span class="nav-number">2.1.</span> <span class="nav-text">针对不会异常完成的 future</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%92%88%E5%AF%B9%E5%8F%AF%E8%83%BD%E5%BC%82%E5%B8%B8%E5%AE%8C%E6%88%90%E7%9A%84-future"><span class="nav-number">2.2.</span> <span class="nav-text">针对可能异常完成的 future</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#thenApply-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.</span> <span class="nav-text">thenApply 的实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#getNow-vs-thenApply-x2F-whenComplete"><span class="nav-number">4.</span> <span class="nav-text">getNow vs. thenApply&#x2F;whenComplete</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

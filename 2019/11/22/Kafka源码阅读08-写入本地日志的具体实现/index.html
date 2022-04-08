@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="回顾在06: Produce请求之写入本地日志中，对ReplicaManager类的appendToLocalLog方法的阅读，主要集中在对异常场景的处理：  非admin客户端写入__consumer_offsets等特殊主题； 找不到请求的主题+分区； 请求的是离线分区； 当前broker不是请求分区的leader； 请求的acks字段不合法，或者为-1（all）但ISR数量小于min.ins">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka源码阅读08: 写入本地日志的具体实现">
+<meta property="og:url" content="http://yoursite.com/2019/11/22/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB08-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97%E7%9A%84%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="回顾在06: Produce请求之写入本地日志中，对ReplicaManager类的appendToLocalLog方法的阅读，主要集中在对异常场景的处理：  非admin客户端写入__consumer_offsets等特殊主题； 找不到请求的主题+分区； 请求的是离线分区； 当前broker不是请求分区的leader； 请求的acks字段不合法，或者为-1（all）但ISR数量小于min.ins">
+<meta property="og:locale">
+<meta property="article:published_time" content="2019-11-22T03:36:37.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.221Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Kafka">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2019/11/22/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB08-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97%E7%9A%84%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Kafka源码阅读08: 写入本地日志的具体实现 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/11/22/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB08-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97%E7%9A%84%E5%85%B7%E4%BD%93%E5%AE%9E%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kafka源码阅读08: 写入本地日志的具体实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2019-11-22 11:36:37" itemprop="dateCreated datePublished" datetime="2019-11-22T11:36:37+08:00">2019-11-22</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h2><p>在<a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/11/06/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB06-Produce%E8%AF%B7%E6%B1%82-1-%E5%86%99%E5%85%A5%E6%9C%AC%E5%9C%B0%E6%97%A5%E5%BF%97/">06: Produce请求之写入本地日志</a>中，对<code>ReplicaManager</code>类的<code>appendToLocalLog</code>方法的阅读，主要集中在对异常场景的处理：</p>
+<ul>
+<li>非admin客户端写入<code>__consumer_offsets</code>等特殊主题；</li>
+<li>找不到请求的主题+分区；</li>
+<li>请求的是离线分区；</li>
+<li>当前broker不是请求分区的leader；</li>
+<li>请求的<code>acks</code>字段不合法，或者为-1（all）但ISR数量小于<code>min.insync.replicas</code>配置。</li>
+</ul>
+<p>会抛出异常被捕获后生成<code>LogAppendResult</code>对象（见server&#x2F;ReplicaManager.scala）</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">LogAppendResult</span>(<span class="params">info: <span class="type">LogAppendInfo</span>, exception: <span class="type">Option</span>[<span class="type">Throwable</span>] = <span class="type">None</span></span>) </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">error</span></span>: <span class="type">Errors</span> = exception <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="type">Errors</span>.<span class="type">NONE</span></span><br><span class="line">    <span class="keyword">case</span> <span class="type">Some</span>(e) =&gt; <span class="type">Errors</span>.forException(e)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对上述异常场景，<code>LogAppendResult.info</code>被置为无效值：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">LogAppendInfo</span> </span>&#123;</span><br><span class="line">  <span class="keyword">val</span> <span class="type">UnknownLogAppendInfo</span> = <span class="type">LogAppendInfo</span>(<span class="number">-1</span>, <span class="number">-1</span>, <span class="type">RecordBatch</span>.<span class="type">NO_TIMESTAMP</span>, <span class="number">-1</span>L, <span class="type">RecordBatch</span>.<span class="type">NO_TIMESTAMP</span>, <span class="number">-1</span>L,</span><br><span class="line">    <span class="type">RecordsProcessingStats</span>.<span class="type">EMPTY</span>, <span class="type">NoCompressionCodec</span>, <span class="type">NoCompressionCodec</span>, <span class="number">-1</span>, <span class="number">-1</span>, offsetsMonotonic = <span class="literal">false</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>appendToLocalLog</code>返回的<code>LogAppendResult</code>在 <a target="_blank" rel="noopener" href="https://bewaremypower.github.io/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/">07: Produce请求之发送响应</a>  中会用来生成<code>PartitionResponse</code>对象和对应主题分区构成<code>Map</code>传给发送响应给客户端的回调函数中。</p>
+<p>也就是说，最关键的部分我们之前暂且跳过了，也就是在正常清空下如何写入本地日志文件，然后生成<code>LogAppendInfo</code>。</p>
+<h2 id="Log-append代码分析"><a href="#Log-append代码分析" class="headerlink" title="Log.append代码分析"></a>Log.append代码分析</h2><p>在<code>cluster</code>包的<code>Partition.scala</code>中，将当前分区的<code>leaderEpoch</code>字段传入了<code>appendAsLeader</code>。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> info = log.appendAsLeader(records, leaderEpoch = <span class="keyword">this</span>.leaderEpoch, isFromClient)</span><br></pre></td></tr></table></figure>
+
+<p><code>log</code>为<code>Log</code>对象，位于<code>log</code>包下的<code>Log.scala</code>。该方法会调用<code>append</code>：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">appendAsLeader</span></span>(records: <span class="type">MemoryRecords</span>, leaderEpoch: <span class="type">Int</span>, isFromClient: <span class="type">Boolean</span> = <span class="literal">true</span>): <span class="type">LogAppendInfo</span> = &#123;</span><br><span class="line">  append(records, isFromClient, assignOffsets = <span class="literal">true</span>, leaderEpoch)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里只考虑来自客户端的请求，因此接下来阅读时<strong>默认<code>isFromClient</code>和<code>assignOffsets</code>为true</strong>。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">append</span></span>(records: <span class="type">MemoryRecords</span>, isFromClient: <span class="type">Boolean</span>, assignOffsets: <span class="type">Boolean</span>, leaderEpoch: <span class="type">Int</span>): <span class="type">LogAppendInfo</span> = &#123;</span><br><span class="line">  maybeHandleIOException(<span class="string">s&quot;Error while appending records to <span class="subst">$topicPartition</span> in dir <span class="subst">$&#123;dir.getParent&#125;</span>&quot;</span>) &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">maybeHandleIOException</span></span>[<span class="type">T</span>](msg: =&gt; <span class="type">String</span>)(fun: =&gt; <span class="type">T</span>): <span class="type">T</span> = &#123;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    fun</span><br><span class="line">  &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> e: <span class="type">IOException</span> =&gt;</span><br><span class="line">      logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)</span><br><span class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">KafkaStorageException</span>(msg, e)</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>maybeHandleIOException</code>捕获<code>fun</code>可能抛出的<code>IOException</code>，进一步抛出<code>KafkaStorageException</code>会被上层捕获生成<code>LogAppendResult</code>。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br></pre></td><td class="code"><pre><span class="line">  <span class="comment">// 校验消息的CRC以及消息长度(字节数)是否合法(不超过配置的 max.message.bytes), 并且会设置以下字段:</span></span><br><span class="line">  <span class="comment">// - firstOffset: 第1条消息的offset, V2版本可以从header的firstOffset字段直接取得</span></span><br><span class="line">  <span class="comment">// - lastOffset: 最后1条消息的offset, V2版本可以从header的firstOffset + lastOffsetDelta得到</span></span><br><span class="line">  <span class="comment">// - shallowCount: 消息集的数量，shallow即浅层，以消息集为单位</span></span><br><span class="line">  <span class="comment">// - validBytes: 所有长度合法的消息的长度之和</span></span><br><span class="line">  <span class="comment">// - offsetsMonotic: 消息offset是否单调递增，利用每个消息集的lastOffset判断</span></span><br><span class="line">  <span class="comment">// - sourceCodec: 生产者消息集的编码方式</span></span><br><span class="line">  <span class="keyword">val</span> appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (appendInfo.shallowCount == <span class="number">0</span>) <span class="comment">// 没有合法消息则直接返回</span></span><br><span class="line">    <span class="keyword">return</span> appendInfo</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 截断records中不合法的字节数, 然而按照前面的逻辑, 如果 analyzeAndValidateRecords 不抛出异常,</span></span><br><span class="line">  <span class="comment">// appendInfo.validBytes 和 records.sizeInBytes 是相等的, 猜测是遗留方法?</span></span><br><span class="line">  <span class="keyword">var</span> validRecords = trimInvalidBytes(records, appendInfo)</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 将 validRecords 插入到日志中, 由于可能其他处理线程也在将消息写入本地文件, 所以用锁保护</span></span><br><span class="line">  lock synchronized &#123;</span><br><span class="line">    <span class="comment">// 检查内存映射的缓冲区是否关闭, 比如在 closeHandlers() 会导致其关闭</span></span><br><span class="line">    <span class="comment">// 若关闭, 则表示无法写入, 抛出 KafkaStorageException</span></span><br><span class="line">    checkIfMemoryMappedBufferClosed()</span><br><span class="line">    <span class="keyword">if</span> (assignOffsets) &#123;</span><br><span class="line">      <span class="comment">// assign offsets to the message set</span></span><br><span class="line">      <span class="comment">// 生产者发送的消息集的offset为0,1,...,n, nextOffsetMetadata记录了本地日志</span></span><br><span class="line">      <span class="comment">// 下一条消息的offset, 将其置为新的firstOffset, 也就是绝对offset</span></span><br><span class="line">      <span class="keyword">val</span> offset = <span class="keyword">new</span> <span class="type">LongRef</span>(nextOffsetMetadata.messageOffset)</span><br><span class="line">      appendInfo.firstOffset = offset.value</span><br><span class="line">      <span class="keyword">val</span> now = time.milliseconds <span class="comment">// 当前时间戳, 即LogAppendTime类型的时间戳</span></span><br><span class="line">      <span class="comment">// 重新验证/解压/压缩得到更新内部offset后的validRecords</span></span><br><span class="line">      <span class="keyword">val</span> validateAndOffsetAssignResult = <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 更新消息集的offset, 对于V1版本以上的消息, 可能因为时间戳类型字段来覆盖时间戳</span></span><br><span class="line">        <span class="type">LogValidator</span>.validateMessagesAndAssignOffsets(validRecords,</span><br><span class="line">          offset, <span class="comment">// 会更新为最后1条消息的绝对offset+1, 即下一次写入本地日志的消息的offset</span></span><br><span class="line">          time,</span><br><span class="line">          now,</span><br><span class="line">          appendInfo.sourceCodec,</span><br><span class="line">          appendInfo.targetCodec,</span><br><span class="line">          config.compact,</span><br><span class="line">          config.messageFormatVersion.messageFormatVersion.value,</span><br><span class="line">          config.messageTimestampType,</span><br><span class="line">          config.messageTimestampDifferenceMaxMs,</span><br><span class="line">          leaderEpoch,</span><br><span class="line">          isFromClient)</span><br><span class="line">      &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> e: <span class="type">IOException</span> =&gt; <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">KafkaException</span>(<span class="string">&quot;Error in validating messages while appending to log &#x27;%s&#x27;&quot;</span>.format(name), e)</span><br><span class="line">      &#125;</span><br><span class="line">      validRecords = validateAndOffsetAssignResult.validatedRecords</span><br><span class="line">      <span class="comment">// 设置 appendInfo 的以下字段：</span></span><br><span class="line">      <span class="comment">// - maxTimestamp: 消息集的最大时间戳</span></span><br><span class="line">      <span class="comment">// - offsetOfMaxTimestamp: 最大时间戳对应消息的绝对offset</span></span><br><span class="line">      <span class="comment">// - lastOffset: 最后1条消息的offset</span></span><br><span class="line">      <span class="comment">// - logAppendTime: 如果时间戳类型为LOG_APPEND_TIME, 则设为刚刚获取的时间戳</span></span><br><span class="line">      appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp</span><br><span class="line">      appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp</span><br><span class="line">      appendInfo.lastOffset = offset.value - <span class="number">1</span></span><br><span class="line">      appendInfo.recordsProcessingStats = validateAndOffsetAssignResult.recordsProcessingStats</span><br><span class="line">      <span class="keyword">if</span> (config.messageTimestampType == <span class="type">TimestampType</span>.<span class="type">LOG_APPEND_TIME</span>)</span><br><span class="line">        appendInfo.logAppendTime = now</span><br><span class="line"></span><br><span class="line">      <span class="comment">// 重新验证消息大小是否超过max.message.size, 因为修改字段后重新压缩可能导致消息大小改变</span></span><br><span class="line">      <span class="keyword">if</span> (validateAndOffsetAssignResult.messageSizeMaybeChanged) &#123;</span><br><span class="line">        <span class="keyword">for</span> (batch &lt;- validRecords.batches.asScala) &#123;</span><br><span class="line">          <span class="keyword">if</span> (batch.sizeInBytes &gt; config.maxMessageSize) &#123;</span><br><span class="line">            <span class="comment">// 更新stats(略)</span></span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">RecordTooLargeException</span>(<span class="string">&quot;Message batch size is %d bytes which exceeds the maximum configured size of %d.&quot;</span></span><br><span class="line">              .format(batch.sizeInBytes, config.maxMessageSize))</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="comment">// assignOffsets为false的处理(略)</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> 对V2以上版本的消息集, 更新 leader epoch cache</span></span><br><span class="line">    validRecords.batches.asScala.foreach &#123; batch =&gt;</span><br><span class="line">      <span class="keyword">if</span> (batch.magic &gt;= <span class="type">RecordBatch</span>.<span class="type">MAGIC_VALUE_V2</span>)</span><br><span class="line">        _leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 检查消息集的总大小是否超过配置的segment.bytes, 即每个日志文件的大小</span></span><br><span class="line">    <span class="keyword">if</span> (validRecords.sizeInBytes &gt; config.segmentSize) &#123;</span><br><span class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">RecordBatchTooLargeException</span>(<span class="string">&quot;Message batch size is %d bytes which exceeds the maximum configured segment size of %d.&quot;</span></span><br><span class="line">        .format(validRecords.sizeInBytes, config.segmentSize))</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// now that we have valid records, offsets assigned, and timestamps updated, we need to</span></span><br><span class="line">    <span class="comment">// validate the idempotent/transactional state of the producers and collect some metadata</span></span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> 验证生产者的 幂等性/事务 状态, 并收集一些元数据</span></span><br><span class="line">    <span class="keyword">val</span> (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)</span><br><span class="line">    maybeDuplicate.foreach &#123; duplicate =&gt;</span><br><span class="line">      appendInfo.firstOffset = duplicate.firstOffset</span><br><span class="line">      appendInfo.lastOffset = duplicate.lastOffset</span><br><span class="line">      appendInfo.logAppendTime = duplicate.timestamp</span><br><span class="line">      appendInfo.logStartOffset = logStartOffset</span><br><span class="line">      <span class="keyword">return</span> appendInfo</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 如果必要, 执行日志回滚策略, 将当前日志文件备份, 并创建空文件作为当前日志文件</span></span><br><span class="line">    <span class="keyword">val</span> segment = maybeRoll(messagesSize = validRecords.sizeInBytes,</span><br><span class="line">      maxTimestampInMessages = appendInfo.maxTimestamp,</span><br><span class="line">      maxOffsetInMessages = appendInfo.lastOffset)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">val</span> logOffsetMetadata = <span class="type">LogOffsetMetadata</span>(</span><br><span class="line">      messageOffset = appendInfo.firstOffset,</span><br><span class="line">      segmentBaseOffset = segment.baseOffset,</span><br><span class="line">      relativePositionInSegment = segment.size)</span><br><span class="line"></span><br><span class="line">    segment.append(firstOffset = appendInfo.firstOffset,</span><br><span class="line">      largestOffset = appendInfo.lastOffset,</span><br><span class="line">      largestTimestamp = appendInfo.maxTimestamp,</span><br><span class="line">      shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,</span><br><span class="line">      records = validRecords)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 更新生产者状态</span></span><br><span class="line">    <span class="keyword">for</span> ((producerId, producerAppendInfo) &lt;- updatedProducers) &#123;</span><br><span class="line">      producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)</span><br><span class="line">      producerStateManager.update(producerAppendInfo)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// update the transaction index with the true last stable offset. The last offset visible</span></span><br><span class="line">    <span class="comment">// to consumers using READ_COMMITTED will be limited by this value and the high watermark.</span></span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> 用最新的稳定offset更新事务</span></span><br><span class="line">    <span class="keyword">for</span> (completedTxn &lt;- completedTxns) &#123;</span><br><span class="line">      <span class="keyword">val</span> lastStableOffset = producerStateManager.completeTxn(completedTxn)</span><br><span class="line">      segment.updateTxnIndex(completedTxn, lastStableOffset)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    producerStateManager.updateMapEndOffset(appendInfo.lastOffset + <span class="number">1</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 更新 nextOffsetMetadata 为 lastOffset+1, 回顾之前if (assignOffsets)分支</span></span><br><span class="line">    <span class="comment">// 在下一批消息到达时, 该offset即新消息集的第1个消息的绝对offset</span></span><br><span class="line">    updateLogEndOffset(appendInfo.lastOffset + <span class="number">1</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> update the first unstable offset (which is used to compute LSO)</span></span><br><span class="line">    updateFirstUnstableOffset()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// trace日志(略)</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// 若未冲刷的消息数量(利用LEO减去recoverPoint得到)达到了配置的&quot;flush.messages&quot;则冲刷消息</span></span><br><span class="line">    <span class="keyword">if</span> (unflushedMessages &gt;= config.flushInterval)</span><br><span class="line">      flush()</span><br><span class="line"></span><br><span class="line">    appendInfo</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注释中标出TODO的部分暂时还不了解原理，包括且不限于：</p>
+<ul>
+<li>leader epoch；</li>
+<li>对事务的支持；</li>
+<li>stable offset（似乎也是用于事务？）</li>
+</ul>
+<h2 id="流程总结"><a href="#流程总结" class="headerlink" title="流程总结"></a>流程总结</h2><p>首先是代码逻辑的大体流程：</p>
+<ol>
+<li><code>records.batches</code>为一组Record Batch，对每个batch都校验CRC是否合法，字节数是否超过配置<code>max.message.bytes</code>；</li>
+<li>若存在不合法的batch，则会抛出异常最终被<code>ReplicaManager.appendToLocalLog</code>捕获（仅限于Produce请求处理的情况），生成包含错误的响应；</li>
+<li>利用records计算出第1条消息和最后1条消息的offset，消息集的数量，合法batch的字节数之和，消息offset是否单调递增，以及消息集的编码方式，构造要返回的<code>LogAppendInfo</code>对象，记为<code>info</code>；</li>
+<li>验证合法消息的数量，并截断不合法的字节数，得到<code>validRecords</code>；（<strong>TODO：此处实现似乎不合理，因为存在不合法的batch直接就抛异常了，但当前最新版本2.3的Kafka源码也是这么处理的</strong>）</li>
+<li>检测内存映射缓存是否被关闭；</li>
+<li>将LEO赋给<code>info.firstOffset</code>，并取得当前时间戳<code>now</code>；</li>
+<li>更新<code>validRecords</code>的offset为绝对offset，若batch是压缩的则重新压缩，将最后1条消息的offset赋给<code>info.lastOffset</code>，并设置<code>info</code>的消息集最大时间戳及对应消息的offset；</li>
+<li>若时间戳类型为<code>LOG_APPEND_TIME</code>，将<code>now</code>赋给<code>info.logAppendTime</code>（默认为-1）；</li>
+<li>若重新压缩的<code>validRecords</code>字节数发生变化，重新检查每个<code>batch</code>的字节数是否超过配置<code>max.message.bytes</code>；</li>
+<li>检查<code>validRecords</code>字节数是否超过配置<code>log.segments.bytes</code>；</li>
+<li>取得当前的<code>LogSegment</code>对象，将<code>validRecords</code>添加进去；</li>
+<li>更新LEO为<code>validRecords</code>最后1条消息的offset+1；</li>
+<li>若未冲刷的消息数量超过了配置<code>flush.messages</code>，则将所有<code>LogSegments</code>写入本地磁盘。</li>
+</ol>
+<p>核心还是用绝对offset替换相对offset。生产者向服务端发送请求时，由于不知道消息集落盘时的offset，所以只能设置offsets为0,1,2,…n-1，也就是相对offset。而分区的leader broker则维护了其LEO，因此收到请求时，会将offsets修改为LEO,LEO+1,LEO+2,…LEO+n-1，最后将LEO更新为LEO+n。而更新的offsets会包含在响应里发送给生产者，这样客户端就可以通过消息送达的回调函数得到发送消息的绝对offset。</p>
+<p>每个<code>Log</code>对应1个分区的消息日志，而消息日志是分为多个文件（日志片段，Log Segment）对应<code>LogSegment</code>对象，负责实际写入磁盘。</p>
+<p>这里回顾用到的3个Kafka服务端配置：</p>
+<ul>
+<li><code>max.message.bytes</code>：每个消息集的最大字节数（这是0.11开始的含义，见<a target="_blank" rel="noopener" href="https://kafka.apache.org/11/documentation.html#upgrade_11_message_format">upgrade 0.11 message format</a>；</li>
+<li><code>log.segment.bytes</code>：Log Segment的最大字节数（所以需要检测消息集字节数是否超过这个值，否则即使新建文件写入消息集，也无法容纳整个消息集）；</li>
+<li><code>flush.messages</code>（Topic级别）：允许<code>LogSegment</code>对象缓存的消息数量，如果缓存消息数超过了该配置就会调用<code>fsync</code>写入磁盘。</li>
+</ul>
+<p>此外，<strong>Record Batch</strong>即<strong>消息集（Message Set）</strong>，Record（记录）即Message（消息）。之所以这里区分，是因为从Kafka 0.11版本开始，消息集的概念发生了变化。在此之前，消息集仅仅是一组消息之前加上Log Overhead（即offset和message size）。而Kafka 0.11版本新增了，V2版本的消息集，增加了独有的header，比如第1条消息和最后1条消息的offset可直接通过header计算得到，还有些其他字段是leader epoch以及实现事务相关的字段。而每条消息（记录）的key和value用varint而非固定4字节的int表示长度，并且消息本身也有header。</p>
+<p>具体参考：<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets</a> </p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Kafka/" rel="tag"># Kafka</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2019/11/07/Kafka%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB07-Produce%E8%AF%B7%E6%B1%82-2-%E5%8F%91%E9%80%81%E5%93%8D%E5%BA%94/" rel="prev" title="Kafka源码阅读07: Produce请求(2): 发送响应">
+      <i class="fa fa-chevron-left"></i> Kafka源码阅读07: Produce请求(2): 发送响应
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/01/07/Scala-%E7%AC%94%E8%AE%B0-%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B%E9%A3%8E%E6%A0%BC%E5%88%9D%E6%8E%A2/" rel="next" title="Scala 笔记 - 函数式编程风格初探">
+      Scala 笔记 - 函数式编程风格初探 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9B%9E%E9%A1%BE"><span class="nav-number">1.</span> <span class="nav-text">回顾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Log-append%E4%BB%A3%E7%A0%81%E5%88%86%E6%9E%90"><span class="nav-number">2.</span> <span class="nav-text">Log.append代码分析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">流程总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

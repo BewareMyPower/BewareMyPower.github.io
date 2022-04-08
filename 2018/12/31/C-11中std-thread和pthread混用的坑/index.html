@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="前言早在之前我就因为混用std::thread和pthread出现bug时纠结过，当时还去查看过std::thread的实现源码，但后来还是没得出结果。现在看来主要原因是我没有找对位置，被C++又臭又长的模板元编程手法给转移了注意力。直到最近我把这个实现弄清楚后，自己造轮子时遇到了另一个bug，才回过头想起之前遇到的问题。 1. 在线程函数中调用pthread_exit和pthread_join在">
+<meta property="og:type" content="article">
+<meta property="og:title" content="C++11中std::thread和pthread混用的坑">
+<meta property="og:url" content="http://yoursite.com/2018/12/31/C-11%E4%B8%ADstd-thread%E5%92%8Cpthread%E6%B7%B7%E7%94%A8%E7%9A%84%E5%9D%91/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="前言早在之前我就因为混用std::thread和pthread出现bug时纠结过，当时还去查看过std::thread的实现源码，但后来还是没得出结果。现在看来主要原因是我没有找对位置，被C++又臭又长的模板元编程手法给转移了注意力。直到最近我把这个实现弄清楚后，自己造轮子时遇到了另一个bug，才回过头想起之前遇到的问题。 1. 在线程函数中调用pthread_exit和pthread_join在">
+<meta property="og:locale">
+<meta property="article:published_time" content="2018-12-31T08:30:14.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:27:10.217Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="thread">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2018/12/31/C-11%E4%B8%ADstd-thread%E5%92%8Cpthread%E6%B7%B7%E7%94%A8%E7%9A%84%E5%9D%91/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>C++11中std::thread和pthread混用的坑 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2018/12/31/C-11%E4%B8%ADstd-thread%E5%92%8Cpthread%E6%B7%B7%E7%94%A8%E7%9A%84%E5%9D%91/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          C++11中std::thread和pthread混用的坑
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2018-12-31 16:30:14" itemprop="dateCreated datePublished" datetime="2018-12-31T16:30:14+08:00">2018-12-31</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2022-02-27 01:27:10" itemprop="dateModified" datetime="2022-02-27T01:27:10+08:00">2022-02-27</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>早在之前我就因为混用<code>std::thread</code>和<code>pthread</code>出现bug时纠结过，当时还去查看过<code>std::thread</code>的实现源码，但后来还是没得出结果。现在看来主要原因是我没有找对位置，被C++又臭又长的模板元编程手法给转移了注意力。直到最近我把这个实现弄清楚后，自己造轮子时遇到了另一个bug，才回过头想起之前遇到的问题。</p>
+<h2 id="1-在线程函数中调用pthread-exit和pthread-join"><a href="#1-在线程函数中调用pthread-exit和pthread-join" class="headerlink" title="1. 在线程函数中调用pthread_exit和pthread_join"></a>1. 在线程函数中调用<code>pthread_exit</code>和<code>pthread_join</code></h2><p>在C++11中，单靠<code>thread</code>是无法取得线程函数的返回值的，必须得借助<code>async</code>等异步设施，*Effective Modern C++*也推崇使用基于任务的并发编程而非基于线程。当然这个是后话了，<br>现在，我就是想直接取得线程函数的返回值，又不继续写<code>pthread</code>那套麻烦的线程函数，那么直接在<code>std::thread</code>的线程函数中调用<code>pthread</code> API？于是有了下面这段代码。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">// test.cc</span><br><span class="line">#include &lt;pthread.h&gt;</span><br><span class="line">#include &lt;stdio.h&gt;</span><br><span class="line">#include &lt;thread&gt;</span><br><span class="line"></span><br><span class="line">int main() &#123;</span><br><span class="line">  // NOTE: make sure cast between long and void* is safe.</span><br><span class="line">  std::thread t([] &#123; pthread_exit(reinterpret_cast&lt;void*&gt;(1)); &#125;);</span><br><span class="line">  void* ret;</span><br><span class="line">  pthread_join(t.native_handle(), &amp;ret);</span><br><span class="line">  printf(&quot;thread exit with %ld\n&quot;, reinterpret_cast&lt;long&gt;(ret));</span><br><span class="line">  return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译运行，结果如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># g++ -std=c++11 test.cc -pthread &amp;&amp; ./a.out                                                                                                              </span><br><span class="line">thread exit with 1</span><br><span class="line">terminate called without an active exception </span><br><span class="line">Aborted                                </span><br></pre></td></tr></table></figure>
+<p>嗯？是不是还要调用<code>t.join()</code>？于是我加上了<code>t.join()</code>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">thread exit with 1</span><br><span class="line">terminate called after throwing an instance of &#x27;std::system_error&#x27;</span><br><span class="line">  what():  No such process</span><br><span class="line">Aborted</span><br></pre></td></tr></table></figure>
+<p>这次是直接抛出异常了。好像都不行啊，那有没有解决方法呢？<br>在此之前，首先得明确一个问题，这里究竟该不该调用<code>t.join()</code>？</p>
+<h2 id="2-std-terminate"><a href="#2-std-terminate" class="headerlink" title="2. std::terminate()"></a>2. <code>std::terminate()</code></h2><p><code>std::terminate()</code>在头文件<code>&lt;exception&gt;</code>中声明，函数签名如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[[noreturn]] void terminate() noexcept;</span><br></pre></td></tr></table></figure>
+<p>功能是调用当前的terminate handler，可以用<code>set_terminate()</code>来指定。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">typedef void (*terminate_handler)();</span><br><span class="line">terminate_handler set_terminate(terminate_handler f) noexcept;</span><br></pre></td></tr></table></figure>
+<p>对于没有被catch的异常，会默认调用<code>terminate()</code>，而<code>terminate()</code>会默认调用<code>abort()</code>。当然这三者并非等价，因为前两者还会打印出各自的信息，比如我们给出这三种调用的输出。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">throw std::exception();  // 1</span><br><span class="line">std::terminate();        // 2</span><br><span class="line">abort();                 // 3</span><br></pre></td></tr></table></figure>
+<p>分别运行这三条语句，均会使进程异常终止(比如在我的系统上<code>echo $?</code>得到结果是134)<br>语句1的输出是</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">terminate called after throwing an instance of &#x27;std::exception&#x27;</span><br><span class="line">  what():  std::exception</span><br><span class="line">Aborted</span><br></pre></td></tr></table></figure>
+<p>语句2的输出是</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">terminate called without an active exception</span><br><span class="line">Aborted</span><br></pre></td></tr></table></figure>
+<p>语句3的输出是</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Aborted</span><br></pre></td></tr></table></figure>
+<p>从上面3种输出的区分可以看出，异常默认处理器、<code>std::terminate()</code>都会打印出自己的信息，然后再递归调用下一步。<br><code>std::terminate()</code>的主要用途是在禁止使用异常的C++项目中进行调用。<br>再回过头看第1节的运行结果，不难得出结论，调用<code>t.join()</code>会抛出异常，而不调用则仅仅是触发<code>std::terminate()</code>，检查<code>t.joinable()</code>的返回值，是true，但是<code>t.join()</code>却抛出了异常，原因当然是<code>pthread_join()</code>改变了<code>std::thread</code>的底层线程句柄，但是并没有将<code>std::thread</code>对象内部的句柄置为初始状态，导致<code>std::thread</code>误认为该线程还没有被<code>join()</code>。</p>
+<h1 id="3-一窥std-thread实现"><a href="#3-一窥std-thread实现" class="headerlink" title="3. 一窥std::thread实现"></a>3. 一窥<code>std::thread</code>实现</h1><p>很遗憾，<code>&lt;thread.h&gt;</code>头文件中没有包含一些关键的函数的实现，所以得自己去下载<code>libstdc++</code>源码，该源码是<code>gcc</code>的一部分。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git clone https://github.com/gcc-mirror/gcc.git</span><br></pre></td></tr></table></figure>
+<p>就我当前的版本(commit 0b47d0)，<code>std::thread</code>的实现在这两个文件中</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">libstdc++-v3/include/std/thread</span><br><span class="line">libstdc++-v3/src/c++11/thread.cc</span><br></pre></td></tr></table></figure>
+<p>查看<code>thread.cc</code>中<code>join()</code>方法的实现</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">void</span><br><span class="line">thread::join()</span><br><span class="line">&#123;</span><br><span class="line">  int __e = EINVAL;</span><br><span class="line"></span><br><span class="line">  if (_M_id != id())</span><br><span class="line">    __e = __gthread_join(_M_id._M_thread, 0);</span><br><span class="line"></span><br><span class="line">  if (__e)</span><br><span class="line">    __throw_system_error(__e);</span><br><span class="line"></span><br><span class="line">  _M_id = id();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>以及<code>thread</code>中<code>joinable()</code>方法的实现</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">bool</span><br><span class="line">joinable() const noexcept</span><br><span class="line">&#123; return !(_M_id == id()); &#125;</span><br></pre></td></tr></table></figure>
+<p>其中<code>_M_id</code>定义如下(<code>// ...</code>是我自己添加的注释，代表省略了其他代码)</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"> /// thread</span><br><span class="line"> class thread</span><br><span class="line"> &#123;</span><br><span class="line"> public:</span><br><span class="line">   typedef __gthread_t			native_handle_type;</span><br><span class="line"></span><br><span class="line">   ~thread()</span><br><span class="line">   &#123;</span><br><span class="line">     if (joinable())</span><br><span class="line">std::terminate();</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   /// thread::id</span><br><span class="line">   class id</span><br><span class="line">   &#123;</span><br><span class="line">     native_handle_type	_M_thread;</span><br><span class="line">     // ...</span><br><span class="line">   &#125;; </span><br><span class="line">   // ...</span><br><span class="line"> private:</span><br><span class="line">   id				_M_id;</span><br><span class="line"> &#125;; </span><br></pre></td></tr></table></figure>
+<p><code>std::thread</code>本身只有1个成员变量<code>_M_id</code>，类型是<code>std::thread::id</code>，而<code>id</code>内部也只有1个成员变量<code>_M_thread</code>，类型是<code>std::thread::native_handle_type</code>，而这个类型标准没有给出规定，由不同操作系统和编译器来决定，显然gcc的实现是<code>__gthread_t</code>，而且在<code>join()</code>方法中是将该类型的变量传入了<code>__gthread_join</code>中。<br>简化上面的代码，也就是说实际上<code>std::thread</code>的<code>join</code>是类似这样的</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">__gthread_t t;</span><br><span class="line"></span><br><span class="line">void myjoin() &#123;</span><br><span class="line">  int e = EINVAL;</span><br><span class="line">  if (t != __gthread_t())</span><br><span class="line">    e = __gthread_join(t, 0);</span><br><span class="line">  if (e)</span><br><span class="line">    throw std::system_error(e);</span><br><span class="line">  t = __gthread_t();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>把这里的<code>__g</code>前缀替换成<code>p</code>的话，相当于就是调用<code>pthread_join()</code>后，重置线程句柄的值为<code>pthread_t</code>的默认值，然后用句柄是否等于<code>pthread_t</code>的默认值来判断是否以及调用了<code>join()</code>。<br>而对于同一个句柄，重复调用<code>pthread_join()</code>会导致返回非0的错误码<code>e</code>，并抛出<code>std::system_error</code>异常。<br>因此，像我在第1节中做的，手动取得<code>native_handle</code>，然后手动调用<code>pthread_join()</code>，就会导致<code>std::thread</code>内部的线程句柄没有重置，进而<code>joinable()</code>返回了不应该返回的true，进而在析构函数中调用了<code>join()</code>。注意，C++析构函数是禁止抛出异常的，在C++11中析构函数默认为<code>noexcept(true)</code>，也就是说直接调用<code>std::terminate()</code>终止程序。<br>这也解释了第1节中两种不同输出的原因，简单总结如下</p>
+<ol>
+<li>不调用<code>t.join()</code>: <code>t</code>内部的线程句柄没有重置，析构函数判断<code>joinable()</code>为true，从而调用<code>t.join()</code>，抛出异常不被捕获，直接调用<code>std::terminate()</code>终止进程；</li>
+<li>调用<code>t.join()</code>: <code>t</code>内部的线程句柄没有重置，调用<code>t.join()</code>，抛出异常，执行默认异常处理流程。</li>
+</ol>
+<p>PS: 为何析构函数禁止抛出异常，以及<code>noexcept</code>的概念，分别参考*Effective C++<em>和</em>Effective Modern C++*的相关条款。<br>哦对了，刚才分析的前提是，<code>__g</code>前缀可以被替换成<code>p</code>，为何可以呢？原因是gcc实际上也是跨平台的，因此会定义一组别名来屏蔽系统API的差异。由于Linux是遵守POSIX接口的，所以这组定义在gcc项目的<code>libgcc/gthr-posix.h</code>中，在该头文件中可以看到下列定义</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">typedef pthread_t __gthread_t;</span><br><span class="line">/* Typically, __gthrw_foo is a weak reference to symbol foo.  */</span><br><span class="line">#define __gthrw(name) __gthrw2(__gthrw_ ## name,name,name)</span><br><span class="line">__gthrw(pthread_join)</span><br></pre></td></tr></table></figure>
+<p>类型别名可以直接typedef，函数名称就得改变符号表了，这里我就不给出内部的<code>__attribute__</code>、<code>__weakref__</code>等具体实现手段了。</p>
+<h2 id="4-不可移植的混合调用方法"><a href="#4-不可移植的混合调用方法" class="headerlink" title="4. 不可移植的混合调用方法"></a>4. 不可移植的混合调用方法</h2><p>有了上述的源码分析后，实际上在<code>pthread_join()</code>之后要做的，仅仅是将<code>std::thread</code>的内部线程句柄重置就完了。不过源码直接将其用<code>private</code>保护，所以得强行做指针转换来修改。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">*reinterpret_cast&lt;pthread_t*&gt;(&amp;t) = pthread_t();</span><br></pre></td></tr></table></figure>
+<p>将这一句代码添加到<code>pthread_join()</code>之后即可。不过本身不可移植指的是这种做法是无法在不同编译器之间移植的，如果指定了编译器使用gcc版本，像这样hack下也未尝不可。<br>给个示例，线程函数中<code>new</code>一个int，然后<code>pthread_join</code>捕获该指针来处理。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;stdio.h&gt;</span><br><span class="line">#include &lt;assert.h&gt;</span><br><span class="line">#include &lt;pthread.h&gt;</span><br><span class="line">#include &lt;thread&gt;</span><br><span class="line">#include &lt;memory&gt;</span><br><span class="line"></span><br><span class="line">void taskNewInt(int x) &#123;</span><br><span class="line">  pthread_exit(new int(x));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">int main() &#123;</span><br><span class="line">  std::thread t(taskNewInt, 47);</span><br><span class="line">  void* ret;</span><br><span class="line">  int error = pthread_join(t.native_handle(), &amp;ret);</span><br><span class="line">  assert(error == 0);</span><br><span class="line"></span><br><span class="line">  printf(&quot;thread joinable? %s\n&quot;, t.joinable() ? &quot;Yes&quot; : &quot;No&quot;);</span><br><span class="line"></span><br><span class="line">  *reinterpret_cast&lt;pthread_t*&gt;(&amp;t) = pthread_t();</span><br><span class="line">  printf(&quot;thread joinable? %s\n&quot;, t.joinable() ? &quot;Yes&quot; : &quot;No&quot;);</span><br><span class="line"></span><br><span class="line">  std::unique_ptr&lt;int&gt; p(static_cast&lt;int*&gt;(ret));  // RAII</span><br><span class="line">  printf(&quot;thread exit with %d (%p)\n&quot;, *p, p.get());</span><br><span class="line">  return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译运行结果</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -std=c++11 native_thread_exit.cc -pthread</span><br><span class="line">$ ./a.out</span><br><span class="line">thread joinable? Yes</span><br><span class="line">thread joinable? No</span><br><span class="line">thread exit with 47 (0x7fd8640008c0)</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-pthread-exit和pthread-cancel会抛出异常"><a href="#5-pthread-exit和pthread-cancel会抛出异常" class="headerlink" title="5. pthread_exit和pthread_cancel会抛出异常"></a>5. <code>pthread_exit</code>和<code>pthread_cancel</code>会抛出异常</h2><p>对，你没看错，这两个C接口，会抛出异常。我之前在造线程轮子的时候，在某个调用<code>pthread_exit()</code>的包装函数声明为<code>noexcept</code>，结果被强制调用<code>std::terminate()</code>了。后来发现，原因是<code>pthread_exit</code>抛出了异常，而<code>noexcept</code>函数中抛出异常不会被捕获，只是简单调用<code>std::terminate()</code>了事。<br>嗯？问题来了，那这个异常又是怎么处理的呢？<br>异常的实现我没有仔细研究过，但大体上和<code>setjmp</code>、<code>longjmp</code>类似，让函数调用栈回绕(unwind)。只不过异常支持多层回绕，因此可以层层传播异常，把底层异常一步步抛到最上层一并处理，从而将错误处理和功能实现相分离。<br>C++和C虽然都是用同一套头文件，但是编译C++时链接到的动态库是libstdc++.so而非libc.so，其中用抛出<code>abi::__forced_unwind</code>异常的方式来简化这个回绕的实现，该异常的默认处理方式就是进行线程栈回绕。包含<code>&lt;cxxabi.h&gt;</code>头文件即可捕获该异常，当然，注意catch处理之后要重新throw抛出异常。<br>这个问题在stackoverflow上有所讨论，参考<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/11452546/why-does-pthread-exit-throw-something-caught-by-ellipsis">why does pthread_exit throw something caught by ellipsis</a> </p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/thread/" rel="tag"># thread</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2018/12/23/lambda%E6%8D%95%E8%8E%B7this%E6%8C%87%E9%92%88/" rel="prev" title="lambda捕获this指针">
+      <i class="fa fa-chevron-left"></i> lambda捕获this指针
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2019/01/27/socket%E8%BF%AD%E4%BB%A3%E5%9E%8B%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%ADCtrl-C%E5%AE%89%E5%85%A8%E9%80%80%E5%87%BA/" rel="next" title="socket迭代型服务器中Ctrl+C安全退出">
+      socket迭代型服务器中Ctrl+C安全退出 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%9C%A8%E7%BA%BF%E7%A8%8B%E5%87%BD%E6%95%B0%E4%B8%AD%E8%B0%83%E7%94%A8pthread-exit%E5%92%8Cpthread-join"><span class="nav-number">2.</span> <span class="nav-text">1. 在线程函数中调用pthread_exit和pthread_join</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-std-terminate"><span class="nav-number">3.</span> <span class="nav-text">2. std::terminate()</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#3-%E4%B8%80%E7%AA%A5std-thread%E5%AE%9E%E7%8E%B0"><span class="nav-number"></span> <span class="nav-text">3. 一窥std::thread实现</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E4%B8%8D%E5%8F%AF%E7%A7%BB%E6%A4%8D%E7%9A%84%E6%B7%B7%E5%90%88%E8%B0%83%E7%94%A8%E6%96%B9%E6%B3%95"><span class="nav-number">1.</span> <span class="nav-text">4. 不可移植的混合调用方法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-pthread-exit%E5%92%8Cpthread-cancel%E4%BC%9A%E6%8A%9B%E5%87%BA%E5%BC%82%E5%B8%B8"><span class="nav-number">2.</span> <span class="nav-text">5. pthread_exit和pthread_cancel会抛出异常</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="Chinese">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    hostname: new URL('http://yoursite.com').hostname,
+    root: '/',
+    scheme: 'Muse',
+    version: '7.7.0',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":false,"scrollpercent":false},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    comments: {"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: '',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}
+  };
+</script>
+
+  <meta name="description" content="[toc] 背景最近对项目做了一个重构，其中有一部分是把代码风格变得很函数式了。Java 8 引入了 lambda 表达式和 Stream 后使得函数式编程就更容易了。这里不谈及比较理论的东西，只谈下我认为的优缺点。 优点：  表达简单直观（虽然使用 Java 还是比较啰嗦） 提倡使用 immutable 对象，实现线程安全更容易 能够通过将 stream 改成 parallel stream 将">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java Stream 简单学习">
+<meta property="og:url" content="http://yoursite.com/2022/02/27/Java-Stream-%E7%AE%80%E5%8D%95%E5%AD%A6%E4%B9%A0/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] 背景最近对项目做了一个重构，其中有一部分是把代码风格变得很函数式了。Java 8 引入了 lambda 表达式和 Stream 后使得函数式编程就更容易了。这里不谈及比较理论的东西，只谈下我认为的优缺点。 优点：  表达简单直观（虽然使用 Java 还是比较啰嗦） 提倡使用 immutable 对象，实现线程安全更容易 能够通过将 stream 改成 parallel stream 将">
+<meta property="og:locale">
+<meta property="article:published_time" content="2022-02-26T17:23:57.000Z">
+<meta property="article:modified_time" content="2022-02-26T17:28:00.460Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2022/02/27/Java-Stream-%E7%AE%80%E5%8D%95%E5%AD%A6%E4%B9%A0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true
+  };
+</script>
+
+  <title>Java Stream 简单学习 | BewareMyPower的博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">BewareMyPower的博客</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+
+</nav>
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="Chinese">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2022/02/27/Java-Stream-%E7%AE%80%E5%8D%95%E5%AD%A6%E4%B9%A0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="XYZ, aka BewareMyPower">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="BewareMyPower的博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java Stream 简单学习
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2022-02-27 01:23:57 / Modified: 01:28:00" itemprop="dateCreated datePublished" datetime="2022-02-27T01:23:57+08:00">2022-02-27</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>[toc]</p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>最近对项目做了一个重构，其中有一部分是把代码风格变得很函数式了。Java 8 引入了 lambda 表达式和 <code>Stream</code> 后使得函数式编程就更容易了。这里不谈及比较理论的东西，只谈下我认为的优缺点。</p>
+<p>优点：</p>
+<ul>
+<li>表达简单直观（虽然使用 Java 还是比较啰嗦）</li>
+<li>提倡使用 immutable 对象，实现线程安全更容易</li>
+<li>能够通过将 stream 改成 parallel stream 将现有代码改成并行处理</li>
+</ul>
+<p>缺点：</p>
+<ul>
+<li>性能有一定损失。可以用 <a target="_blank" rel="noopener" href="https://github.com/openjdk/jmh">JMH</a> 进行性能测试，大多数情况这点性能损失不会有明显影响，除非代码处在关键路径上。</li>
+<li>调试相对比较麻烦。其实很多时候可以通过测试驱动的编码方式避免写了一大串代码后再去排查是不是链式调用的某一块出问题了。</li>
+</ul>
+<h2 id="了解-Stream"><a href="#了解-Stream" class="headerlink" title="了解 Stream"></a>了解 Stream</h2><p>举个例子，给出下面这段处理代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list1 = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>));</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list2 = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(list1.size());</span><br><span class="line">list1.forEach(x -&gt; list2.add(x + <span class="number">100</span>));</span><br><span class="line"><span class="keyword">final</span> List&lt;String&gt; list3 = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(list2.size());</span><br><span class="line">list2.forEach(x -&gt; list3.add(<span class="string">&quot;i-&quot;</span> + x));</span><br></pre></td></tr></table></figure>
+
+<p>从函数式思维的角度，我们实际上是依次对 <code>list1</code> 的每个元素执行以下运算：</p>
+<ol>
+<li>加上 100</li>
+<li>转换成字符串，并加上 <code>i-</code> 前缀。</li>
+</ol>
+<p>理想的函数映射表达是：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;String&gt; list3 = list1.map(x -&gt; x + <span class="number">100</span>).map(x -&gt; <span class="string">&quot;i-&quot;</span> + x);</span><br></pre></td></tr></table></figure>
+
+<p>但是在实际的 Java 代码中，<code>map</code> 这样的操作不能直接作用于容器，而必须作用于容器对应的 stream。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;String&gt; list3 = list1.stream().map(x -&gt; x + <span class="number">100</span>).map(x -&gt; <span class="string">&quot;i-&quot;</span> + x).collect(Collectors.toList());</span><br></pre></td></tr></table></figure>
+
+<p>容器必须先调用 <code>stream()</code> 方法转换成流（<code>Stream</code> 接口）。其实从设计的角度也可以理解，假如对 <code>List</code> 扩充 <code>map</code> 接口：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;R&gt; List&lt;R&gt; <span class="title function_">map</span><span class="params">(Function&lt;? <span class="built_in">super</span> T, ? extends R&gt; mapper)</span></span><br></pre></td></tr></table></figure>
+
+<p>那么每次 <code>map</code> 都会创建新的 <code>List</code> 对象。而 <code>Stream</code> 是可以理解为它只记录了对流中每个元素的<strong>函数</strong>，每次 <code>map</code> 调用返回的只有记录了新的函数（<code>Function</code>）的 <code>Stream</code>，不会将容器中地元素进行拷贝。只有在 <code>collect</code> 调用时才会将元素从流中取出，放入新的容器中。</p>
+<p>流操作会被复合成一个<strong>流管道（stream pipeline）</strong>，它包含：</p>
+<ul>
+<li>源（source）：可以是集合，数组或者函数生成器，或者 I&#x2F;O 管道。</li>
+<li>中间操作（intermediate operation）：将流转换成另一个流，比如前文的 <code>map</code>。</li>
+<li>终端操作（terminal operation）：产生结果或副作用，比如前文的 <code>collect</code>。</li>
+</ul>
+<p>流是惰性的（lazy），只有在终端操作才会对源数据进行计算，并且仅在需要时消耗源元素。</p>
+<p>Java 容器都提供了 <code>stream()</code> 方法取得对应的流。类似的，用 <code>parallelStream()</code> 方法得到并行流，并行流会使用线程池来计算，本文只讨论顺序流。对于数组 <code>T[]</code> 可以用 <code>Arrays#stream</code> 静态方法将其转换成流，对于可变参数列表 <code>T...</code> 可以用 <code>Streams#of</code> 静态方法将其转换成流，对于两个整型表示的左闭右开区间，可以用 <code>IntStream#range</code> 或者 <code>LongStream#range</code> 将其转换成流。比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Arrays.stream(<span class="keyword">new</span> <span class="title class_">int</span>[]&#123;<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>&#125;);</span><br><span class="line">Stream.of(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line">IntStream.range(<span class="number">0</span>, <span class="number">3</span>);</span><br><span class="line">LongStream.range(<span class="number">0L</span>, <span class="number">3L</span>);</span><br></pre></td></tr></table></figure>
+
+<p>上述四行代码都是将序列 0，1，2 转换成流。</p>
+<p>流也是一次性的，在遍历一遍后，流就会处于关闭状态。比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Stream&lt;Integer&gt; stream = Stream.of(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line">stream.map(x -&gt; x + <span class="number">10</span>);</span><br><span class="line">stream.map(x -&gt; x + <span class="number">10</span>);</span><br></pre></td></tr></table></figure>
+
+<p>在对同一个流第二次调用 <code>map</code> 时会报出异常：</p>
+<blockquote>
+<p>java.lang.IllegalStateException: stream has already been operated upon or closed</p>
+</blockquote>
+<p>因为无法对同一个流进行两次中间操作（如果允许的话，就会流就会出现两个分支），因此在进行一个中间操作后，这个流就无法再使用，必须对返回的流添加新的中间操作。注意到错误提示里还有个 or closed 描述，因为流也可以调用 <code>close()</code> 主动关闭，一般是对于 I&#x2F;O 管道的流才需要这些操作。</p>
+<h2 id="常用的流操作示例"><a href="#常用的流操作示例" class="headerlink" title="常用的流操作示例"></a>常用的流操作示例</h2><p>在对流有了一个基础认识后，这一节偏实用性，以 <code>List</code> 容器（列表）作为源，介绍一些常见的操作。</p>
+<h3 id="reduce"><a href="#reduce" class="headerlink" title="reduce"></a>reduce</h3><p>比如最简单的求和：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line"><span class="type">int</span> <span class="variable">sum</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span> (Integer x : list) &#123;</span><br><span class="line">    sum += x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实际上可以看作有一个初始值 0（<code>identity</code>），然后依次对流的每个元素 <code>value</code> 进行求和运算（<code>identity + value</code>）。此时可以用 <code>reduce</code> 中间操作：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">int</span> <span class="variable">sum</span> <span class="operator">=</span> Stream.of(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>).reduce(<span class="number">0</span>, Integer::sum);</span><br></pre></td></tr></table></figure>
+
+<p>如果初始值的类型和流的元素类型不一致，那么需要第三个参数 <code>combiner</code>，它是函数 <code>(T, T) -&gt; T</code>，其中 <code>T</code> 为初始值的类型，该函数必须满足：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">combiner.apply(u, accumulator.apply(identity, t)) == accumulator.apply(u, t)</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>accumulator</code> 为 <code>reduce</code> 的第二个参数。如果流不是并行的，这个参数不起作用，该函数不会被调用，这个时候传入一个简单的 <code>(x, y) -&gt; x</code> 函数即可。对 combiner 感兴趣的可以阅读 <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/24308146/why-is-a-combiner-needed-for-reduce-method-that-converts-type-in-java-8">这个讨论</a>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line"><span class="keyword">final</span> <span class="type">String</span> <span class="variable">result</span> <span class="operator">=</span> list.stream().reduce(<span class="string">&quot;prefix&quot;</span> , (s, i) -&gt; s + <span class="string">&quot;-&quot;</span> + i, (x, y) -&gt; x);</span><br><span class="line">System.out.println(result)</span><br></pre></td></tr></table></figure>
+
+<p>上述代码得到的 <code>result</code> 是字符串 <code>prefix-1-2-3</code>。如果要在并行场景下也能工作，那么需要特别设计 combiner，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="type">String</span> <span class="variable">result</span> <span class="operator">=</span> list.parallelStream().reduce(<span class="string">&quot;prefix&quot;</span> , (s, i) -&gt; s + <span class="string">&quot;-&quot;</span> + i,</span><br><span class="line">        (s1, s2) -&gt; s1 + s2.substring(<span class="string">&quot;prefix&quot;</span>.length()));</span><br></pre></td></tr></table></figure>
+
+<p>类似地，假如要合并多个列表，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list1 = Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list2 = Arrays.asList(<span class="number">4</span>, <span class="number">5</span>);</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list3 = Arrays.asList(<span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>);</span><br></pre></td></tr></table></figure>
+
+<p>直接的方式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(list1);</span><br><span class="line">list.addAll(list2);</span><br><span class="line">list.addAll(list3);</span><br></pre></td></tr></table></figure>
+
+<p>基于 <code>reduce</code> 的方式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Stream.of(list1, list2, list3).reduce(<span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(), (lhs, rhs) -&gt; &#123;</span><br><span class="line">    lhs.addAll(rhs);</span><br><span class="line">    <span class="keyword">return</span> lhs;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h3 id="flatMap"><a href="#flatMap" class="headerlink" title="flatMap"></a>flatMap</h3><p>接着前一节的示例，合并多个列表，虽然用 <code>reduce</code> 是自然的，但并不是最适合的。这种场景实际上应该用 <code>flatMap</code>。</p>
+<p><code>map</code> 是将 <code>Stream&lt;T&gt;</code> 映射到 <code>Stream&lt;R&gt;</code>。但列表合并的需求，实际上是将 <code>Stream&lt;List&lt;T&gt;&gt;</code> 转换成 <code>Stream&lt;T&gt;</code>，无法直接将 <code>List&lt;T&gt;</code> 通过函数得到 <code>T</code>，而且两者关系也不是一对一，比如第 1 个 <code>List&lt;T&gt;</code> 包含 3 个元素，那么我们想要在返回的流中添加 3 个 <code>T</code> 。在这种数量发生斌华的场景，则是 <code>flatMap</code> 使用的时机。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;R&gt; Stream&lt;R&gt; <span class="title function_">flatMap</span><span class="params">(Function&lt;? <span class="built_in">super</span> T, ? extends Stream&lt;? extends R&gt;&gt; mapper)</span>;</span><br></pre></td></tr></table></figure>
+
+<p>它接收的函数是将 <code>T</code> 映射到 <code>Stream&lt;R&gt;</code>。如果 <code>T</code> 是 <code>List&lt;E&gt;</code>，那么很自然地就能得到 <code>Stream&lt;E&gt;</code>。因此基于 <code>flatMap</code> 可以更自然地合并多个列表：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Stream.of(list1, list2, list3).flatMap(List::stream).collect(Collectors.toList());</span><br></pre></td></tr></table></figure>
+
+<p>可见，<code>flatMap</code> 特别适合于流的元素（比如 <code>List&lt;T&gt;</code>）本身就可以转换成流（<code>Stream&lt;T&gt;</code>）的场景。对于列表嵌套，只需要多调用几次 <code>flatMap</code> 即可，比如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;List&lt;Integer&gt;&gt; list1 = Arrays.asList(Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>), Arrays.asList(<span class="number">4</span>, <span class="number">5</span>));</span><br><span class="line"><span class="keyword">final</span> List&lt;List&lt;Integer&gt;&gt; list2 = Collections.singletonList(Arrays.asList(<span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>));</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Stream.of(list1, list2)</span><br><span class="line">        .flatMap(Collection::stream)</span><br><span class="line">        .flatMap(Collection::stream)</span><br><span class="line">        .collect(Collectors.toList());</span><br></pre></td></tr></table></figure>
+
+<h3 id="groupingBy"><a href="#groupingBy" class="headerlink" title="groupingBy"></a>groupingBy</h3><p>这个需求常见于将流进行分类。比如将整数流按照奇数和偶数分成两部分。这个操作本身是将列表分成多个列表，但是并没有对应的中间操作，原因在于，流不支持分叉成多个流。此时要使用终端操作 <code>Collectors.groupingBy</code>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;T, K&gt; Collector&lt;T, ?, Map&lt;K, List&lt;T&gt;&gt;&gt;</span><br><span class="line">groupingBy(Function&lt;? <span class="built_in">super</span> T, ? <span class="keyword">extends</span> <span class="title class_">K</span>&gt; classifier) &#123;</span><br><span class="line">    <span class="keyword">return</span> groupingBy(classifier, toList());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>它将流的元素 <code>T</code> 映射到结果 <code>K</code>，最终得到的结果是 <code>Map&lt;K, List&lt;T&gt;&gt;</code>。假如要将整数流分成奇数和偶数，那么我们可以用 <code>Boolean</code> 表示元素 <code>Integer</code> 是否为奇数。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>);</span><br><span class="line"><span class="keyword">final</span> Map&lt;Boolean, List&lt;Integer&gt;&gt; map = list.stream().collect(Collectors.groupingBy(i -&gt; i % <span class="number">2</span> != <span class="number">0</span>));</span><br><span class="line">System.out.println(map.get(<span class="literal">true</span>)); <span class="comment">// 奇数</span></span><br><span class="line">System.out.println(map.get(<span class="literal">false</span>)); <span class="comment">// 偶数</span></span><br></pre></td></tr></table></figure>
+
+<p>打印结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[1, 3, 5]</span><br><span class="line">[2, 4]</span><br></pre></td></tr></table></figure>
+
+<p>这里需要重点注意的是，<code>get(true)</code> 和 <code>get(false)</code> 可能得到的是 <code>null</code>，对应的分别是流中没有偶数和没有奇数。因此需要谨慎地进行  null check。</p>
+<h3 id="filter"><a href="#filter" class="headerlink" title="filter"></a>filter</h3><p>将整数流分成奇数和偶数有一个更慢的方法，那就是实用 <code>filter</code> 遍历两次，第一次过滤出奇数，第二次过滤出偶数：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; list = Arrays.asList(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>);</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; odds = list.stream().filter(x -&gt; x % <span class="number">2</span> != <span class="number">0</span>).collect(Collectors.toList());</span><br><span class="line"><span class="keyword">final</span> List&lt;Integer&gt; evens = list.stream().filter(x -&gt; x % <span class="number">2</span> == <span class="number">0</span>).collect(Collectors.toList());</span><br><span class="line">System.out.println(odds);</span><br><span class="line">System.out.println(evens);</span><br></pre></td></tr></table></figure>
+
+<p>如果我们只想对奇数或者偶数处理，那么 <code>filter</code> 则是最适合的。</p>
+<h2 id="Map-容器的流处理"><a href="#Map-容器的流处理" class="headerlink" title="Map 容器的流处理"></a>Map 容器的流处理</h2><p>比如对 <code>Map</code> 容器本身无法得到流，因为 <code>Map</code> 并不是单个元素的流，只能对 <code>entrySet()</code> 方法返回的 <code>Set</code> 得到流 <code>Stream&lt;Map.Entry&lt;K, V&gt;&gt;</code>，然后对每个元素 <code>Map.Entry&lt;K, V&gt;</code> 进行处理。如果要在终端操作中重新得到新的 map，比如 <code>Map&lt;K, V2&gt;</code> 或者 <code>Map&lt;K2, V2&gt;</code>，那么则需要用 <code>Collector.toMap</code> 方法。</p>
+<p>举个例子，下列 Java 代码将 <code>Map&lt;Integer, Integer&gt;</code> 分别对 value 和 entry 做映射得到 <code>Map&lt;Integer, String&gt;</code> 和 <code>Map&lt;String, String&gt;</code>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> Map&lt;Integer, Integer&gt; map = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line">map.put(<span class="number">1</span>, <span class="number">100</span>);</span><br><span class="line">map.put(<span class="number">2</span>, <span class="number">200</span>);</span><br><span class="line">System.out.println(map.entrySet().stream().collect(Collectors.toMap(</span><br><span class="line">        Map.Entry::getKey,</span><br><span class="line">        e -&gt; <span class="string">&quot;value-&quot;</span> + e.getValue())</span><br><span class="line">));</span><br><span class="line">System.out.println(map.entrySet().stream().collect(Collectors.toMap(</span><br><span class="line">        e -&gt; <span class="string">&quot;key-&quot;</span> + e.getKey(),</span><br><span class="line">        e -&gt; <span class="string">&quot;value-&quot;</span> + e.getValue())</span><br><span class="line">));</span><br></pre></td></tr></table></figure>
+
+<p>打印结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&#123;1=value-100, 2=value-200&#125;</span><br><span class="line">&#123;key-1=value-100, key-2=value-200&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见 <code>Collectors.toMap</code> 中分别接收对 key 和 value 的映射，因此支持 key 和 value 不同的中间操作次数。</p>
+<p>相比而言，Scala 在函数式编程上简洁太多，比如实现上述功能，在 Scala 中只需要如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> map = <span class="type">Map</span>(<span class="number">1</span> -&gt; <span class="number">100</span>, <span class="number">2</span> -&gt; <span class="number">200</span>)</span><br><span class="line">println(map.map(e =&gt; (e._1, <span class="string">&quot;value-&quot;</span> + e._2)))</span><br><span class="line">println(map.map(e =&gt; (<span class="string">&quot;key-&quot;</span> + e._1, <span class="string">&quot;value-&quot;</span> + e._2)))</span><br></pre></td></tr></table></figure>
+
+<h2 id="Collectors"><a href="#Collectors" class="headerlink" title="Collectors"></a>Collectors</h2><p>前面我们使用了三种 <code>Collectors</code> 的静态方法，这里我们来看看 <code>collect</code> 到底做了什么。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;R, A&gt; R <span class="title function_">collect</span><span class="params">(Collector&lt;? <span class="built_in">super</span> T, A, R&gt; collector)</span></span><br></pre></td></tr></table></figure>
+
+<p>首先 <code>collect</code> 方法接受的是 <code>Collector&lt;T, A, R&gt;</code> 类型，其中：</p>
+<ul>
+<li>T 是流的元素类型</li>
+<li>A 是 <code>Collector</code> 进行中间运算的类型</li>
+<li>R 是结果类型</li>
+</ul>
+<p>以 <code>Collectors#toList</code> 方法为例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;T&gt;</span><br><span class="line">Collector&lt;T, ?, List&lt;T&gt;&gt; toList() &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">CollectorImpl</span>&lt;&gt;((Supplier&lt;List&lt;T&gt;&gt;) ArrayList::<span class="keyword">new</span>, List::add,</span><br><span class="line">                               (left, right) -&gt; &#123; left.addAll(right); <span class="keyword">return</span> left; &#125;,</span><br><span class="line">                               CH_ID);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>CollectorImpl</code> 实现了 <code>Collector</code> 接口，接收四个参数，最主要的是：</p>
+<table>
+<thead>
+<tr>
+<th>字段名</th>
+<th><code>toList</code> 传入的参数</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>supplier</code></td>
+<td><code>ArrayList::new</code></td>
+<td>创建 <code>ArrayList</code> 存放收集的元素</td>
+</tr>
+<tr>
+<td><code>accumulator</code></td>
+<td><code>List::add</code></td>
+<td>以流的元素作为参数对 <code>supplier</code> 调用该方法，</td>
+</tr>
+</tbody></table>
+<p>其余的 <code>combiner</code> 和 <code>characteristics</code> 比较复杂，这里就不深入研究了。</p>
+<p>如果有特殊要求，我们也可以模仿 <code>CollectorImpl</code> 类自行实现 <code>Collector</code> 接口。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要是最近一次重构中对 Java 基于 <code>Stream</code> 的函数式编程的一点学习笔记，从了解 <code>Stream</code> 开始到常用的几个中间操作，以及针对 <code>Map</code> 容器的特殊处理，最后看了下终端操作 <code>collect</code>。更多内容可以参考 <a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/api/">Java SE 8 Documents</a>。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/02/06/Java-Executor-%E5%AD%A6%E4%B9%A0/" rel="prev" title="Java Executor 学习">
+      <i class="fa fa-chevron-left"></i> Java Executor 学习
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2022/04/08/Python-lambda-%E5%AE%9E%E7%8E%B0%E5%9B%9E%E8%B0%83%E5%87%BD%E6%95%B0/" rel="next" title="Python lambda 实现回调函数">
+      Python lambda 实现回调函数 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let activeClass = CONFIG.comments.activeClass;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BA%86%E8%A7%A3-Stream"><span class="nav-number">2.</span> <span class="nav-text">了解 Stream</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E7%94%A8%E7%9A%84%E6%B5%81%E6%93%8D%E4%BD%9C%E7%A4%BA%E4%BE%8B"><span class="nav-number">3.</span> <span class="nav-text">常用的流操作示例</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#reduce"><span class="nav-number">3.1.</span> <span class="nav-text">reduce</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#flatMap"><span class="nav-number">3.2.</span> <span class="nav-text">flatMap</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#groupingBy"><span class="nav-number">3.3.</span> <span class="nav-text">groupingBy</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#filter"><span class="nav-number">3.4.</span> <span class="nav-text">filter</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Map-%E5%AE%B9%E5%99%A8%E7%9A%84%E6%B5%81%E5%A4%84%E7%90%86"><span class="nav-number">4.</span> <span class="nav-text">Map 容器的流处理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Collectors"><span class="nav-number">5.</span> <span class="nav-text">Collectors</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">XYZ, aka BewareMyPower</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">40</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">XYZ, aka BewareMyPower</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> v6.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">Theme – <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> v7.7.0
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
