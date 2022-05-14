@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>Pulsar AVRO schema 源码阅读：初识 | BewareMyPower的博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="[toc] Pulsar AVRO schema 入门一般而言，Avro 序列化需要提供序列化对象的格式规范，它使用 JSON 来表达。Pulsar 中则是可以直接传递 对象在内部自动生成。比如对于当前类型： 1234567@AllArgsConstructor@Datapublic class User &amp;#123;    private String name;    private int">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pulsar AVRO schema 源码阅读：初识">
+<meta property="og:url" content="http://yoursite.com/2022/05/14/Pulsar-AVRO-schema-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%9A%E5%88%9D%E8%AF%86/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:description" content="[toc] Pulsar AVRO schema 入门一般而言，Avro 序列化需要提供序列化对象的格式规范，它使用 JSON 来表达。Pulsar 中则是可以直接传递 对象在内部自动生成。比如对于当前类型： 1234567@AllArgsConstructor@Datapublic class User &amp;#123;    private String name;    private int">
+<meta property="og:locale">
+<meta property="article:published_time" content="2022-05-14T14:46:50.000Z">
+<meta property="article:modified_time" content="2022-05-14T14:47:50.235Z">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta property="article:tag" content="Pulsar">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="BewareMyPower的博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 6.0.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">BewareMyPower的博客</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-Pulsar-AVRO-schema-源码阅读：初识" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/05/14/Pulsar-AVRO-schema-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%9A%E5%88%9D%E8%AF%86/" class="article-date">
+  <time datetime="2022-05-14T14:46:50.000Z" itemprop="datePublished">2022-05-14</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Pulsar AVRO schema 源码阅读：初识
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>[toc]</p>
+<h2 id="Pulsar-AVRO-schema-入门"><a href="#Pulsar-AVRO-schema-入门" class="headerlink" title="Pulsar AVRO schema 入门"></a>Pulsar AVRO schema 入门</h2><p>一般而言，Avro 序列化需要提供序列化对象的<a target="_blank" rel="noopener" href="https://avro.apache.org/docs/current/spec.html">格式规范</a>，它使用 JSON 来表达。Pulsar 中则是可以直接传递 对象在内部自动生成。比如对于当前类型：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@AllArgsConstructor</span></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">User</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">int</span> age;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>发送一条消息：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">client.newProducer(Schema.AVRO(User.class))</span><br><span class="line">        .topic(<span class="string">&quot;my-topic&quot;</span>)</span><br><span class="line">        .create()</span><br><span class="line">        .newMessage()</span><br><span class="line">        .value(<span class="keyword">new</span> <span class="title class_">User</span>(<span class="string">&quot;xyz&quot;</span>, <span class="number">11</span>))</span><br><span class="line">        .send();</span><br></pre></td></tr></table></figure>
+
+<p>然后查询该 topic 的 schema：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ curl -L http://localhost:8080/admin/v2/schemas/public/default/my-topic/schema</span><br><span class="line">&#123;<span class="string">&quot;version&quot;</span>:0,<span class="string">&quot;type&quot;</span>:<span class="string">&quot;AVRO&quot;</span>,<span class="string">&quot;timestamp&quot;</span>:0,<span class="string">&quot;data&quot;</span>:<span class="string">&quot;&#123;\&quot;type\&quot;:\&quot;record\&quot;,\&quot;name\&quot;:\&quot;User\&quot;,\&quot;namespace\&quot;:\&quot;pulsar.schema\&quot;,\&quot;fields\&quot;:[&#123;\&quot;name\&quot;:\&quot;age\&quot;,\&quot;type\&quot;:\&quot;int\&quot;&#125;,&#123;\&quot;name\&quot;:\&quot;name\&quot;,\&quot;type\&quot;:[\&quot;null\&quot;,\&quot;string\&quot;],\&quot;default\&quot;:null&#125;]&#125;&quot;</span>,<span class="string">&quot;properties&quot;</span>:&#123;<span class="string">&quot;__jsr310ConversionEnabled&quot;</span>:<span class="string">&quot;false&quot;</span>,<span class="string">&quot;__alwaysAllowNull&quot;</span>:<span class="string">&quot;true&quot;</span>&#125;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>查询的结果中 <code>data</code> 字段（去掉 <code>\</code> 转义符）就是 Avro 对 schema 的定义：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;record&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;User&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;namespace&quot;</span><span class="punctuation">:</span> <span class="string">&quot;pulsar.schema&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;fields&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;age&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;int&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;name&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">        <span class="string">&quot;null&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="string">&quot;string&quot;</span></span><br><span class="line">      <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;default&quot;</span><span class="punctuation">:</span> <span class="keyword">null</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Schema-在-Pulsar-中的使用"><a href="#Schema-在-Pulsar-中的使用" class="headerlink" title="Schema 在 Pulsar 中的使用"></a>Schema 在 Pulsar 中的使用</h2><h3 id="Pulsar-用到的各种-Schema-接口"><a href="#Pulsar-用到的各种-Schema-接口" class="headerlink" title="Pulsar 用到的各种 Schema 接口"></a>Pulsar 用到的各种 Schema 接口</h3><p>首先 Apache Avro 库提供的 <code>Schema</code> 对象（位于 <code>org.apache.avro</code> 包）我们称之为 AVRO <code>Schema</code>。</p>
+<p>然后在 <code>PulsarApi.proto</code> 中我们可以看到 <code>Schema</code> 的定义：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">Schema</span> &#123;</span><br><span class="line">    <span class="keyword">enum </span><span class="title class_">Type</span> &#123;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">        Avro = <span class="number">4</span>;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">required</span> <span class="type">string</span> name = <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">required</span> <span class="type">bytes</span> schema_data = <span class="number">3</span>;</span><br><span class="line">    <span class="keyword">required</span> Type type = <span class="number">4</span>;</span><br><span class="line">    <span class="keyword">repeated</span> KeyValue properties = <span class="number">5</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">message </span><span class="title class_">CommandProducer</span> &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="keyword">optional</span> Schema schema = <span class="number">7</span>;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">message </span><span class="title class_">CommandSubscribe</span> &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="keyword">optional</span> Schema schema = <span class="number">12</span>;</span><br></pre></td></tr></table></figure>
+
+<p>PB 的 <code>Schema</code> 暴露给用户的接口则是 <code>SchemaInfo</code>（只列出部分方法）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">SchemaInfo</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// schema 名字</span></span><br><span class="line">    String <span class="title function_">getName</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 对于 AVRO 类型，为 Avro schema 序列化后的字节数组</span></span><br><span class="line">    <span class="type">byte</span>[] getSchema();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// schema 类型，比如 AVRO</span></span><br><span class="line">    SchemaType <span class="title function_">getType</span><span class="params">()</span>;</span><br><span class="line">  </span><br><span class="line">    <span class="comment">// 用户自定义的一组属性</span></span><br><span class="line">    Map&lt;String, String&gt; <span class="title function_">getProperties</span><span class="params">()</span>;</span><br></pre></td></tr></table></figure>
+
+<p>而 Pulsar 在创建生产者和消费者时指定的则是自己的 <code>Schema</code> 接口（只列出部分方法）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">Schema</span>&lt;T&gt; <span class="keyword">extends</span> <span class="title class_">Cloneable</span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将对象按照 schema 定义编码成字节数组</span></span><br><span class="line">    <span class="type">byte</span>[] encode(T message);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将字节数组按照 schema 定义解码成对象，默认忽略 schema version</span></span><br><span class="line">    <span class="keyword">default</span> T <span class="title function_">decode</span><span class="params">(<span class="type">byte</span>[] bytes)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> decode(bytes, <span class="literal">null</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">default</span> T <span class="title function_">decode</span><span class="params">(<span class="type">byte</span>[] bytes, <span class="type">byte</span>[] schemaVersion)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> decode(bytes);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>大多数实现中会将 <code>SchemaInfo</code> 保存到内部字段，就像前文阅读的 <code>AbstractStructSchema</code> 类一样。Pulsar <code>Schema</code> 类提供了 <code>encode</code>&#x2F;<code>decode</code> 方法负责在用户传入的 <code>T</code> 类型和 <code>byte[]</code> 中进行互相转换。</p>
+<p>最后总结下见到的几个 schema 相关的类：</p>
+<table>
+<thead>
+<tr>
+<th>包</th>
+<th>类</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>org.apache.avro</td>
+<td><code>Schema</code></td>
+<td>底层使用的 Avro schema 类</td>
+</tr>
+<tr>
+<td>org.apache.pulsar.common.api.proto</td>
+<td><code>Schema</code></td>
+<td>ProtoBuf 协议定义的 schema 描述，会被持久化，并在 Broker 端进行注册和校验</td>
+</tr>
+<tr>
+<td>org.apache.pulsar.common.schema</td>
+<td><code>SchemaInfo</code></td>
+<td>对 ProtoBuf Schema 的接口包装</td>
+</tr>
+<tr>
+<td>org.apache.pulsar.client.api</td>
+<td><code>Schema&lt;T&gt;</code></td>
+<td>构造生产者或消费者对象时可以指定，在内部会对对象进行编解码，同时包含 <code>SchemaInfo</code> 用于注册和验证 schema 兼容性。</td>
+</tr>
+</tbody></table>
+<h3 id="Schema-在-Broker-端的处理"><a href="#Schema-在-Broker-端的处理" class="headerlink" title="Schema 在 Broker 端的处理"></a>Schema 在 Broker 端的处理</h3><p>Broker 主要负责对生产者&#x2F;消费者上传的 schema 进行注册和验证。Pulsar 的 <code>Schema</code> 对象在构造生产者和消费者时都会被设置为内部字段，位于 <code>ProducerBase</code> 和 <code>ConsumerBase</code> 中，并且在创建生产者或者订阅时会取得 <code>SchemaInfo</code> 附在 Producer 或者 Subscribe 命令上传递给 broker。</p>
+<p>在 Broker 中并不是直接使用 protobuf 的 <code>Schema</code>，而是转换成了 <code>SchemaData</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> SchemaData <span class="title function_">getSchema</span><span class="params">(Schema protocolSchema)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> SchemaData.builder()</span><br><span class="line">        .data(protocolSchema.getSchemaData())</span><br><span class="line">        .isDeleted(<span class="literal">false</span>)</span><br><span class="line">        .timestamp(System.currentTimeMillis())</span><br><span class="line">        .user(Strings.nullToEmpty(originalPrincipal))</span><br><span class="line">        .type(Commands.getSchemaType(protocolSchema.getType()))</span><br><span class="line">        .props(protocolSchema.getPropertiesList().stream().collect(</span><br><span class="line">            Collectors.toMap(</span><br><span class="line">                KeyValue::getKey,</span><br><span class="line">                KeyValue::getValue</span><br><span class="line">            )</span><br><span class="line">        )).build();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在处理 Producer 请求时：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> CompletableFuture&lt;SchemaVersion&gt; <span class="title function_">tryAddSchema</span><span class="params">(Topic topic, SchemaData schema)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (schema != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> topic.addSchema(schema);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br></pre></td></tr></table></figure>
+
+<p>调用了 <code>Topic#addSchema</code> 注册 schema。</p>
+<p>而在处理 Subscribe 请求时则是：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (schema != <span class="literal">null</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> topic.addSchemaIfIdleOrCheckCompatible(schema)</span><br><span class="line">            .thenCompose(v -&gt; topic.subscribe(option));</span><br></pre></td></tr></table></figure>
+
+<p>调用 <code>Topic#addSchemaIfIdleOrCheckCompatible</code> 对 schema 进行兼容性检查。至于实现细节就不深入了，实际上都是调用 Pulsar 实现的 Schema 注册服务（<code>SchemaRegistryService</code>）的相关方法。</p>
+<h3 id="Schema-在-Client-端的处理"><a href="#Schema-在-Client-端的处理" class="headerlink" title="Schema 在 Client 端的处理"></a>Schema 在 Client 端的处理</h3><p>Client 除了上传 schema 外，最重要的就是利用 schema 对用户传入的对象进行编解码。在 <code>ProducerBase#newMessage</code> 方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> TypedMessageBuilder&lt;T&gt; <span class="title function_">newMessage</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">TypedMessageBuilderImpl</span>&lt;&gt;(<span class="built_in">this</span>, schema);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>生产端的 schema 被传入了 <code>TypedMessageBuilderImpl</code> 中，在用 <code>value</code> 方法指定消息的值时：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> TypedMessageBuilder&lt;T&gt; <span class="title function_">value</span><span class="params">(T value)</span> &#123;</span><br><span class="line">    <span class="comment">/* ... */</span></span><br><span class="line">    <span class="built_in">this</span>.content = ByteBuffer.wrap(schema.encode(value));</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>会用 <code>encode</code> 方法得到字节数组以进行网络传输。</p>
+<p>而在消费端，收到新消息时，会将消息的 payload 和 <code>schema</code> 一起构造成 <code>MessageImpl</code> 对象，比如在 <code>ConsumerImpl#newSingleMessage</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> MessageImpl&lt;V&gt; message = MessageImpl.create(topicName.toString(), batchMessageIdImpl,</span><br><span class="line">        msgMetadata, singleMessageMetadata, payloadBuffer,</span><br><span class="line">        createEncryptionContext(msgMetadata), cnx(), schema, redeliveryCount, poolMessages, consumerEpoch);</span><br></pre></td></tr></table></figure>
+
+<p>在 <code>MessageImpl#getValue</code> 中，会利用 schema 将收到的字节数组解码成 <code>T</code> 对象：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> T <span class="title function_">getValue</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">SchemaInfo</span> <span class="variable">schemaInfo</span> <span class="operator">=</span> getSchemaInfo();</span><br><span class="line">    <span class="keyword">if</span> (schemaInfo != <span class="literal">null</span> &amp;&amp; SchemaType.KEY_VALUE == schemaInfo.getType()) &#123;</span><br><span class="line">        <span class="comment">/* ... */</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* ... */</span></span><br><span class="line">        <span class="keyword">return</span> decode(schema.supportSchemaVersioning() ? getSchemaVersion() : <span class="literal">null</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> T <span class="title function_">decode</span><span class="params">(<span class="type">byte</span>[] schemaVersion)</span> &#123;</span><br><span class="line">    <span class="comment">// 对于设置了 poolMessage 的消息，直接对 payload 内部的 NIO buffer（可能在堆外）进行解码</span></span><br><span class="line">    <span class="comment">// 否则会对 getData() 进行解码，getData() 会拷贝一份 payload</span></span><br><span class="line">    <span class="type">T</span> <span class="variable">value</span> <span class="operator">=</span> poolMessage ? schema.decode(payload.nioBuffer(), schemaVersion) : <span class="literal">null</span>;</span><br><span class="line">    <span class="keyword">if</span> (value != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> value;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 注：下面代码有些啰嗦，直接 schema.decode(getData(), schemaVersion) 就行</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">null</span> == schemaVersion) &#123;</span><br><span class="line">        <span class="keyword">return</span> schema.decode(getData());</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> schema.decode(getData(), schemaVersion);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Schema-AVRO-方法实现"><a href="#Schema-AVRO-方法实现" class="headerlink" title="Schema#AVRO 方法实现"></a>Schema#AVRO 方法实现</h2><h3 id="AvroSchema"><a href="#AvroSchema" class="headerlink" title="AvroSchema"></a>AvroSchema</h3><p>用户端一般传递 <code>Class</code> 对象即可，实际上底层会将其转换成 <code>SchemaDefinition</code> 对象：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> &lt;T&gt; Schema&lt;T&gt; <span class="title function_">AVRO</span><span class="params">(Class&lt;T&gt; pojo)</span> &#123;</span><br><span class="line">    <span class="comment">// 实际上也是将 Class 对象转换成 SchemaDefinition 对象来构造</span></span><br><span class="line">    <span class="keyword">return</span> DefaultImplementation.getDefaultImplementation()</span><br><span class="line">            .newAvroSchema(SchemaDefinition.builder().withPojo(pojo).build());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> &lt;T&gt; Schema&lt;T&gt; <span class="title function_">AVRO</span><span class="params">(SchemaDefinition&lt;T&gt; schemaDefinition)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> DefaultImplementation.getDefaultImplementation().newAvroSchema(schemaDefinition);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在 <code>SchemaDefinition</code> 中会保存这个 <code>Class</code> 类型的字段：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> Class&lt;T&gt; pojo;</span><br></pre></td></tr></table></figure>
+
+<p>回到 <code>Schema#AVRO</code> 方法，它实际上是基于 <code>SchemaDefinition</code> 对象创建了 <code>AvroSchema</code> 作为 schema 对象：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;T&gt; AvroSchema&lt;T&gt; <span class="title function_">of</span><span class="params">(SchemaDefinition&lt;T&gt; schemaDefinition)</span> &#123;</span><br><span class="line">    <span class="comment">/* 这里会首先处理 schema reader/writer 用于支持 multi-schema，这里我们暂不关心这个特性 */</span></span><br><span class="line">    <span class="comment">// getPojo() 返回的用户提供的 T 对应的 Class 对象，这里取得它的 ClassLoader</span></span><br><span class="line">    <span class="type">ClassLoader</span> <span class="variable">pojoClassLoader</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">    <span class="keyword">if</span> (schemaDefinition.getPojo() != <span class="literal">null</span>) &#123;</span><br><span class="line">        pojoClassLoader = schemaDefinition.getPojo().getClassLoader();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">AvroSchema</span>&lt;&gt;(parseSchemaInfo(schemaDefinition, SchemaType.AVRO), pojoClassLoader);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="title function_">AvroSchema</span><span class="params">(SchemaInfo schemaInfo, ClassLoader pojoClassLoader)</span> &#123;</span><br><span class="line">    <span class="built_in">super</span>(schemaInfo);</span><br><span class="line">    <span class="built_in">this</span>.pojoClassLoader = pojoClassLoader;</span><br><span class="line">    <span class="comment">/* 设置 schema reader/writer (略) */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其继承体系为：</p>
+<figure class="highlight jboss-cli"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">       +<span class="params">-----------</span>+</span><br><span class="line">       |[I] Schema |</span><br><span class="line">       +<span class="params">-----</span>^<span class="params">-----</span>+</span><br><span class="line">             |</span><br><span class="line">    +<span class="params">--------</span>+<span class="params">---------</span>+</span><br><span class="line">    |[A] AbstractSchema|</span><br><span class="line">    +<span class="params">--------</span>^<span class="params">---------</span>+</span><br><span class="line">             |</span><br><span class="line">  +<span class="params">----------</span>+<span class="params">-------------</span>+</span><br><span class="line">  |[A] AbstractStructSchema|</span><br><span class="line">  +<span class="params">----------</span>^<span class="params">-------------</span>+</span><br><span class="line">             |</span><br><span class="line">+<span class="params">------------</span>+<span class="params">---------------</span>+</span><br><span class="line">|[A] AbstractBaseStructSchema|</span><br><span class="line">+<span class="params">------------</span>^<span class="params">---------------</span>+</span><br><span class="line">             |</span><br><span class="line">       +<span class="params">-----</span>+<span class="params">------</span>+</span><br><span class="line">       | AvroSchema |</span><br><span class="line">       +<span class="params">------------</span>+</span><br></pre></td></tr></table></figure>
+
+<p>再依次看基类的构造方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> SchemaInfo schemaInfo;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">AbstractStructSchema</span><span class="params">(SchemaInfo schemaInfo)</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.schemaInfo = schemaInfo;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// org.apache.avro.schema</span></span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> Schema schema;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="title function_">AvroBaseStructSchema</span><span class="params">(SchemaInfo schemaInfo)</span> &#123;</span><br><span class="line">    <span class="built_in">super</span>(schemaInfo);</span><br><span class="line">    <span class="built_in">this</span>.schema = parseAvroSchema(<span class="keyword">new</span> <span class="title class_">String</span>(schemaInfo.getSchema(), UTF_8));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见 <code>Schema#AVRO</code> 方法最关键的是：</p>
+<ol>
+<li>调用 <code>SchemaUtils#parseSchemaInfo</code> 得到 <code>SchemaInfo</code> 对象。</li>
+<li>将 <code>SchemaInfo</code> 对象传入 <code>AvroBaseStructSchema#parseAvroSchema</code> 对象得到 Avro 库的 <code>Schema</code> 对象。</li>
+</ol>
+<h3 id="SchemaUtils-parseSchemaInfo"><a href="#SchemaUtils-parseSchemaInfo" class="headerlink" title="SchemaUtils#parseSchemaInfo"></a>SchemaUtils#parseSchemaInfo</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> &lt;T&gt; SchemaInfo <span class="title function_">parseSchemaInfo</span><span class="params">(SchemaDefinition&lt;T&gt; schemaDefinition, SchemaType schemaType)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> SchemaInfoImpl.builder()</span><br><span class="line">            .schema(createAvroSchema(schemaDefinition).toString().getBytes(UTF_8))</span><br><span class="line">            .properties(schemaDefinition.getProperties())</span><br><span class="line">            .name(<span class="string">&quot;&quot;</span>)</span><br><span class="line">            .type(schemaType).build();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 将 SchemaDefinition 转换成 Avro Schema 对象</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Schema <span class="title function_">createAvroSchema</span><span class="params">(SchemaDefinition schemaDefinition)</span> &#123;</span><br><span class="line">    <span class="type">Class</span> <span class="variable">pojo</span> <span class="operator">=</span> schemaDefinition.getPojo();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (StringUtils.isNotBlank(schemaDefinition.getJsonDef())) &#123;</span><br><span class="line">        <span class="keyword">return</span> parseAvroSchema(schemaDefinition.getJsonDef());</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (pojo != <span class="literal">null</span>) &#123; <span class="comment">// 在之前通过 withPojo 已经设置过 pojo</span></span><br><span class="line">        ThreadLocal&lt;Boolean&gt; validateDefaults = <span class="literal">null</span>;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="type">Field</span> <span class="variable">validateDefaultsField</span> <span class="operator">=</span> Schema.class.getDeclaredField(<span class="string">&quot;VALIDATE_DEFAULTS&quot;</span>);</span><br><span class="line">            validateDefaultsField.setAccessible(<span class="literal">true</span>);</span><br><span class="line">            validateDefaults = (ThreadLocal&lt;Boolean&gt;) validateDefaultsField.get(<span class="literal">null</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (NoSuchFieldException | IllegalAccessException e) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;Cannot disable validation of default values&quot;</span>, e);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> <span class="type">boolean</span> <span class="variable">savedValidateDefaults</span> <span class="operator">=</span> validateDefaults.get();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// Disable validation of default values for compatibility</span></span><br><span class="line">            validateDefaults.set(<span class="literal">false</span>);</span><br><span class="line">            <span class="keyword">return</span> extractAvroSchema(schemaDefinition, pojo);</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            validateDefaults.set(savedValidateDefaults);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;Schema definition must specify pojo class or schema json definition&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>针对 Avro schema，需要将 <code>Schema#VALIDATE_DEFAULTS</code> 设为 false（这似乎是为了和 Avro 1.8 生成的类兼容，参考 <a target="_blank" rel="noopener" href="https://github.com/apache/pulsar/pull/5938">#5938</a>）然后调用 <code>extractAvroSchema</code>，再改回去。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Schema <span class="title function_">extractAvroSchema</span><span class="params">(SchemaDefinition schemaDefinition, Class pojo)</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 一般 pojo 是不包含 SCHEMA$ 这个字段的，因此会进入 catch 分支</span></span><br><span class="line">        <span class="keyword">return</span> parseAvroSchema(pojo.getDeclaredField(<span class="string">&quot;SCHEMA$&quot;</span>).get(<span class="literal">null</span>).toString());</span><br><span class="line">    &#125; <span class="keyword">catch</span> (NoSuchFieldException | IllegalAccessException | IllegalArgumentException ignored) &#123;</span><br><span class="line">        <span class="comment">// SchemaDefinition 的 alwaysAllowNull 默认为 true，因此回创建 AllowNull 对象</span></span><br><span class="line">        <span class="type">ReflectData</span> <span class="variable">reflectData</span> <span class="operator">=</span> schemaDefinition.getAlwaysAllowNull()</span><br><span class="line">                 ? <span class="keyword">new</span> <span class="title class_">ReflectData</span>.AllowNull()</span><br><span class="line">                 : <span class="keyword">new</span> <span class="title class_">ReflectData</span>();</span><br><span class="line">        <span class="comment">// 给 reflectdata 添加一些逻辑类型（主要是日期和时间）的转换</span></span><br><span class="line">        AvroSchema.addLogicalTypeConversions(reflectData, schemaDefinition.isJsr310ConversionEnabled(), <span class="literal">false</span>);</span><br><span class="line">        <span class="keyword">return</span> reflectData.getSchema(pojo);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实际上是将 POJO 类通过 AVRO 库转换成 AVRO 的 <code>Schema</code> 类型。回顾 <code>parseSchemaInfo</code> 方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.schema(createAvroSchema(schemaDefinition).toString().getBytes(UTF_8))</span><br></pre></td></tr></table></figure>
+
+<p>将 <code>Schema</code> 转换成字符串再按照 UTF-8 编码成字节作为 <code>SchemaInfo</code> 的 <code>schema</code> 字段。</p>
+<h3 id="SchemaUtils-parseAvroSchema"><a href="#SchemaUtils-parseAvroSchema" class="headerlink" title="SchemaUtils#parseAvroSchema"></a>SchemaUtils#parseAvroSchema</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Schema <span class="title function_">parseAvroSchema</span><span class="params">(String schemaJson)</span> &#123;</span><br><span class="line">    <span class="keyword">final</span> Schema.<span class="type">Parser</span> <span class="variable">parser</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Schema</span>.Parser();</span><br><span class="line">    parser.setValidateDefaults(<span class="literal">false</span>);</span><br><span class="line">    <span class="keyword">return</span> parser.parse(schemaJson);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里实际上又将转换成字节数组的 schema 又转换回去了。</p>
+<h3 id="encode-和-decode-方法"><a href="#encode-和-decode-方法" class="headerlink" title="encode 和 decode 方法"></a>encode 和 decode 方法</h3><p>AVRO schema 的编解码实现在 <code>AbstractStructSchema</code> 类：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> SchemaReader&lt;T&gt; reader;</span><br><span class="line"><span class="keyword">protected</span> SchemaWriter&lt;T&gt; writer;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">byte</span>[] encode(T message) &#123;</span><br><span class="line">    <span class="keyword">return</span> writer.write(message);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> T <span class="title function_">decode</span><span class="params">(<span class="type">byte</span>[] bytes)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> reader.read(bytes);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里用到了前文我们忽略的 <code>SchemaReader</code> 和 <code>SchemaWriter</code>，它们是在 <code>AvroSchema</code> 中设置的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="title function_">AvroSchema</span><span class="params">(SchemaInfo schemaInfo, ClassLoader pojoClassLoader)</span> &#123;</span><br><span class="line">    <span class="comment">/* ... */</span></span><br><span class="line">    <span class="comment">// 用于从 SchemaInfo 的属性中取得 __jsr310ConversionEnabled 来判断是否支持 JSR 310</span></span><br><span class="line">    <span class="comment">// 从而兼容旧的 Pulsar 客户端（不支持 JSR 310 转换）</span></span><br><span class="line">    <span class="type">boolean</span> <span class="variable">jsr310ConversionEnabled</span> <span class="operator">=</span> getJsr310ConversionEnabledFromSchemaInfo(schemaInfo);</span><br><span class="line">    setReader(<span class="keyword">new</span> <span class="title class_">MultiVersionAvroReader</span>&lt;&gt;(schema, pojoClassLoader,</span><br><span class="line">            getJsr310ConversionEnabledFromSchemaInfo(schemaInfo)));</span><br><span class="line">    setWriter(<span class="keyword">new</span> <span class="title class_">AvroWriter</span>&lt;&gt;(schema, jsr310ConversionEnabled));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>首先来看 <code>AvroWriter</code>，也就是编码（将 <code>T</code> 转换成 <code>byte[]</code>）：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">AvroWriter</span><span class="params">(Schema schema, <span class="type">boolean</span> jsr310ConversionEnabled)</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.byteArrayOutputStream = <span class="keyword">new</span> <span class="title class_">ByteArrayOutputStream</span>();</span><br><span class="line">    <span class="built_in">this</span>.encoder = EncoderFactory.get().binaryEncoder(<span class="built_in">this</span>.byteArrayOutputStream, <span class="literal">null</span>);</span><br><span class="line">    <span class="type">ReflectData</span> <span class="variable">reflectData</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ReflectData</span>();</span><br><span class="line">    <span class="comment">// 这里会决定是否进行 JSR 310 转换</span></span><br><span class="line">    AvroSchema.addLogicalTypeConversions(reflectData, jsr310ConversionEnabled);</span><br><span class="line">    <span class="built_in">this</span>.writer = <span class="keyword">new</span> <span class="title class_">ReflectDatumWriter</span>&lt;&gt;(schema, reflectData);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="type">byte</span>[] write(T message) &#123;</span><br><span class="line">    <span class="type">byte</span>[] outputBytes = <span class="literal">null</span>;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        writer.write(message, <span class="built_in">this</span>.encoder);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">SchemaSerializationException</span>(e);</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="built_in">this</span>.encoder.flush();</span><br><span class="line">            <span class="comment">// 从 write 的输出流中取出编码后的字节</span></span><br><span class="line">            outputBytes = <span class="built_in">this</span>.byteArrayOutputStream.toByteArray();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception ex) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">SchemaSerializationException</span>(ex);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">this</span>.byteArrayOutputStream.reset();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> outputBytes;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实际上是构造了 Avro 库的 <code>ReflectDatumWriter</code> 进行编码。</p>
+<p>再来看 <code>MultiVersionAvroReader</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">MultiVersionAvroReader</span><span class="params">(Schema readerSchema, ClassLoader pojoClassLoader, <span class="type">boolean</span> jsr310ConversionEnabled)</span> &#123;</span><br><span class="line">    <span class="built_in">super</span>(<span class="keyword">new</span> <span class="title class_">AvroReader</span>&lt;&gt;(readerSchema, pojoClassLoader, jsr310ConversionEnabled), readerSchema);</span><br></pre></td></tr></table></figure>
+
+<p>它是构造了 <code>AvroReader</code> 负责实际的解码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">AbstractMultiVersionReader</span><span class="params">(SchemaReader&lt;T&gt; providerSchemaReader)</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.providerSchemaReader = providerSchemaReader;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> T <span class="title function_">read</span><span class="params">(<span class="type">byte</span>[] bytes, <span class="type">int</span> offset, <span class="type">int</span> length)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> providerSchemaReader.read(bytes);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注：multi version schema 的实现更为复杂，内部用了一个 cache 来缓存不同版本的 schema reader。</p>
+</blockquote>
+<p>而 <code>AvroReader</code> 实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">AvroReader</span><span class="params">(Schema schema, ClassLoader classLoader, <span class="type">boolean</span> jsr310ConversionEnabled)</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.schema = schema;</span><br><span class="line">    <span class="keyword">if</span> (classLoader != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="type">ReflectData</span> <span class="variable">reflectData</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ReflectData</span>(classLoader);</span><br><span class="line">        AvroSchema.addLogicalTypeConversions(reflectData, jsr310ConversionEnabled);</span><br><span class="line">        <span class="built_in">this</span>.reader = <span class="keyword">new</span> <span class="title class_">ReflectDatumReader</span>&lt;&gt;(schema, schema, reflectData);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.reader = <span class="keyword">new</span> <span class="title class_">ReflectDatumReader</span>&lt;&gt;(schema);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> T <span class="title function_">read</span><span class="params">(InputStream inputStream)</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="type">BinaryDecoder</span> <span class="variable">decoderFromCache</span> <span class="operator">=</span> decoders.get();</span><br><span class="line">        <span class="type">BinaryDecoder</span> <span class="variable">decoder</span> <span class="operator">=</span> DecoderFactory.get().binaryDecoder(inputStream, decoderFromCache);</span><br><span class="line">        <span class="keyword">if</span> (decoderFromCache == <span class="literal">null</span>) &#123;</span><br><span class="line">            decoders.set(decoder);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> reader.read(<span class="literal">null</span>, DecoderFactory.get().binaryDecoder(inputStream, decoder));</span><br></pre></td></tr></table></figure>
+
+<p>实际上是构造了 Avro 库的 <code>ReflectDatumReader</code> 进行解码。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>至此，关于 Pulsar 处理 AVRO schema 的流程大致有了了解。其实就是对 Avro 库进行了包装，用来对用户传入的对象进行编解码。同时，将 AVRO schema 的 JSON 描述信息存放到了 schema info 的 data 字段中，Broker 会将其持久化，并对 Client 上传的 schema 描述信息进行注册和验证。更多的细节可以进一步阅读 Pulsar 的 schema 注册服务。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2022/05/14/Pulsar-AVRO-schema-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%9A%E5%88%9D%E8%AF%86/" data-id="cl35zgsgt0000vk1u611486lf" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Pulsar/" rel="tag">Pulsar</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/04/08/Python-lambda-%E5%AE%9E%E7%8E%B0%E5%9B%9E%E8%B0%83%E5%87%BD%E6%95%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Python lambda 实现回调函数</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/C/" rel="tag">C++</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Go/" rel="tag">Go</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Java/" rel="tag">Java</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Kafka/" rel="tag">Kafka</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Pulsar/" rel="tag">Pulsar</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Python/" rel="tag">Python</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scala/" rel="tag">Scala</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/algorithm/" rel="tag">algorithm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/golang/" rel="tag">golang</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/thread/" rel="tag">thread</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/vim/" rel="tag">vim</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag">搭环境</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" rel="tag">网络编程</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E9%93%BE%E6%8E%A5/" rel="tag">链接</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/C/" style="font-size: 20px;">C++</a> <a href="/tags/Go/" style="font-size: 10px;">Go</a> <a href="/tags/Java/" style="font-size: 16.67px;">Java</a> <a href="/tags/Kafka/" style="font-size: 18.33px;">Kafka</a> <a href="/tags/Pulsar/" style="font-size: 13.33px;">Pulsar</a> <a href="/tags/Python/" style="font-size: 10px;">Python</a> <a href="/tags/Scala/" style="font-size: 10px;">Scala</a> <a href="/tags/algorithm/" style="font-size: 10px;">algorithm</a> <a href="/tags/golang/" style="font-size: 10px;">golang</a> <a href="/tags/thread/" style="font-size: 10px;">thread</a> <a href="/tags/vim/" style="font-size: 15px;">vim</a> <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" style="font-size: 16.67px;">搭环境</a> <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" style="font-size: 10px;">网络编程</a> <a href="/tags/%E9%93%BE%E6%8E%A5/" style="font-size: 11.67px;">链接</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/05/">May 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/04/">April 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/02/">February 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/10/">October 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/09/">September 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/08/">August 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/05/">May 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/08/">August 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">July 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/01/">January 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/07/">July 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/06/">June 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">January 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/12/">December 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">November 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/10/">October 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2022/05/14/Pulsar-AVRO-schema-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%9A%E5%88%9D%E8%AF%86/">Pulsar AVRO schema 源码阅读：初识</a>
+          </li>
+        
+          <li>
+            <a href="/2022/04/08/Python-lambda-%E5%AE%9E%E7%8E%B0%E5%9B%9E%E8%B0%83%E5%87%BD%E6%95%B0/">Python lambda 实现回调函数</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/27/Java-Stream-%E7%AE%80%E5%8D%95%E5%AD%A6%E4%B9%A0/">Java Stream 简单学习</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/06/Java-Executor-%E5%AD%A6%E4%B9%A0/">Java Executor 学习</a>
+          </li>
+        
+          <li>
+            <a href="/2021/10/03/%E9%87%8D%E6%96%B0%E5%AD%A6%E4%B9%A0-Golang/">重新学习 Golang</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2022 XYZ, aka BewareMyPower<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>

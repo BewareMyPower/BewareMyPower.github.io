@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>BewareMyPower的博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="BewareMyPower的博客">
+<meta property="og:url" content="http://yoursite.com/page/5/index.html">
+<meta property="og:site_name" content="BewareMyPower的博客">
+<meta property="og:locale">
+<meta property="article:author" content="XYZ, aka BewareMyPower">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="BewareMyPower的博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 6.0.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">BewareMyPower的博客</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-生成字典序的全排列算法" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/05/%E7%94%9F%E6%88%90%E5%AD%97%E5%85%B8%E5%BA%8F%E7%9A%84%E5%85%A8%E6%8E%92%E5%88%97%E7%AE%97%E6%B3%95/" class="article-date">
+  <time datetime="2018-09-05T08:38:11.000Z" itemprop="datePublished">2018-09-05</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/05/%E7%94%9F%E6%88%90%E5%AD%97%E5%85%B8%E5%BA%8F%E7%9A%84%E5%85%A8%E6%8E%92%E5%88%97%E7%AE%97%E6%B3%95/">生成字典序的全排列算法</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="代码测试模板"><a href="#代码测试模板" class="headerlink" title="代码测试模板"></a>代码测试模板</h1><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;numeric&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="keyword">constexpr</span> <span class="type">int</span> n = <span class="number">4</span>;</span><br><span class="line"><span class="type">int</span> a[n];</span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">init</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">iota</span>(a, a + n, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">printA</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> x : a)</span><br><span class="line">        cout &lt;&lt; x;</span><br><span class="line">    cout &lt;&lt; endl;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="1-交换元素法"><a href="#1-交换元素法" class="headerlink" title="1. 交换元素法"></a>1. 交换元素法</h1><p>《剑指Offer》第一版的面试题28：字符串的排列，书上给出的递归算法实现如下：</p>
+<figure class="highlight scss"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">void <span class="built_in">Permutation</span>(int k) &#123;</span><br><span class="line">    if (k == n)</span><br><span class="line">        <span class="built_in">printX</span>();</span><br><span class="line">    for (int i = k; i &lt; n; i++) &#123;</span><br><span class="line">        <span class="built_in">swap</span>(a[i], a[k]);</span><br><span class="line">        <span class="built_in">Permutation</span>(k + <span class="number">1</span>);</span><br><span class="line">        <span class="built_in">swap</span>(a[i], a[k]);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这种做法的问题是，得出的结果无法保持字典序，比如n&#x3D;4时，1432在1423前面，原因是4和2交换后，后面的3和2就失去了有序性。<br>那么对后面进行排序呢？也不行，如果排序之后，2的位置变了，之后调用的<code>swap(a[1], a[3])</code>交换的便是4和3而非4和2。</p>
+<h1 id="2-DFS"><a href="#2-DFS" class="headerlink" title="2. DFS"></a>2. DFS</h1><p>其实字典序排序的就是找到N叉树的所有根节点到叶子节点的路径，以123为例</p>
+<figure class="highlight gherkin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">       [ ]</span><br><span class="line">    /   |<span class="string">   \</span></span><br><span class="line"><span class="string">  1     2     3</span></span><br><span class="line"><span class="string"> / \   / \   / \</span></span><br><span class="line"><span class="string">2   3 1   3 1   2</span></span><br><span class="line"><span class="string"></span>|<span class="string">   </span>|<span class="string"> </span>|<span class="string">   </span>|<span class="string"> </span>|<span class="string">   </span>|</span><br><span class="line">3   2 3   2 2   1</span><br></pre></td></tr></table></figure>
+<p>构造出这棵树，然后DFS即可。问题是如何构造？实际上是N叉树剪枝。剪枝通过为每个节点设置标志来判断，无需用哈希表，每个节点对应数组的一个下标。实现如下：<br>先添加全局变量以及修改<code>init()</code>函数</p>
+<figure class="highlight scss"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="selector-id">#include</span> &lt;algorithm&gt;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">bool visited<span class="selector-attr">[n]</span>;</span><br><span class="line">int a0<span class="selector-attr">[n]</span>;  <span class="comment">// 保存a[n]的原始数据</span></span><br><span class="line">inline void <span class="built_in">init</span>() &#123;</span><br><span class="line">    <span class="built_in">iota</span>(a0, a0 + n, <span class="number">1</span>);</span><br><span class="line">    <span class="built_in">copy</span>(a0, a0 + n, a);</span><br><span class="line">    <span class="built_in">fill</span>(visited, visited + n, false);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后实现递归函数</p>
+<figure class="highlight arduino"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">dfs</span><span class="params">(<span class="type">int</span> k)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (k &gt;= n) &#123;</span><br><span class="line">        <span class="built_in">printA</span>();</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!visited[i]) &#123;  <span class="comment">// 剪枝</span></span><br><span class="line">            visited[i] = <span class="literal">true</span>;</span><br><span class="line">            a[k] = a0[i];</span><br><span class="line">            <span class="built_in">dfs</span>(k + <span class="number">1</span>);</span><br><span class="line">            visited[i] = <span class="literal">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="3-STL算法"><a href="#3-STL算法" class="headerlink" title="3. STL算法"></a>3. STL算法</h1><p>STL提供了现成的函数来提供下一个字典序(默认)排列</p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sort(a, a + n);</span><br><span class="line"><span class="keyword">do</span> &#123;</span><br><span class="line">    print<span class="constructor">A()</span>;</span><br><span class="line">&#125; <span class="keyword">while</span> (next<span class="constructor">_permutation(<span class="params">a</span>, <span class="params">a</span> + <span class="params">n</span>)</span>);</span><br></pre></td></tr></table></figure>
+
+<p>因此上述代码就足以实现算法了，这里主要研究下<code>next_permutation()</code>的实现。<br><code>next_permutation()</code>生成的是下一个较大的序列，比如对123生成的就是132而非213、231，因为不存在大小范围在123和132之间的排列。<br>设当前序列为a[n]，且存在i使得a[i]&gt;a[i+1]&gt;…&gt;a[n-1]。此时无法通过交换a[i]到a[n-1]之间的两个元素使其字典序更大。<br>因此必须将a[i-1]和a[i]..a[n-1]之间一个比a[i-1]大的数交换，比如对153642，后缀642单调递减，因此得交换3和6、4、2的一个数。而交换2会使字典序减小，因此交换4，得到154632，由于6&gt;4&gt;3&gt;2，相当于3插入2和4之间，因此后缀632是单调递减，需要将其逆置来获得最小字典序。<br>具体证明这里不详述，可参考<a target="_blank" rel="noopener" href="http://www.cnblogs.com/devymex/archive/2010/08/17/1801122.html">全排列生成算法: next_permutation</a></p>
+<figure class="highlight reasonml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">bool</span> <span class="constructor">NextPermutation()</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (n &lt;= <span class="number">1</span>)</span><br><span class="line">        return <span class="literal">false</span>;</span><br><span class="line">    <span class="comment">// 找出右边最大递减序列a[i..n-1]</span></span><br><span class="line">    <span class="built_in">int</span> i = n - <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">while</span> (i &gt; <span class="number">0</span><span class="operator"> &amp;&amp; </span>a<span class="literal">[<span class="identifier">i</span> - <span class="number">1</span>]</span> &gt;= a<span class="literal">[<span class="identifier">i</span>]</span>)</span><br><span class="line">        i--;</span><br><span class="line">    <span class="keyword">if</span> (i<span class="operator"> == </span><span class="number">0</span>) &#123;  <span class="comment">// 整个a[n]为降序</span></span><br><span class="line">        std::reverse(a, a + n);  <span class="comment">// 恢复成初始的升序状态</span></span><br><span class="line">        return <span class="literal">false</span>;  <span class="comment">// 已经是最大字典序</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">int</span> j = std::lower<span class="constructor">_bound(<span class="params">a</span> + <span class="params">i</span>, <span class="params">a</span> + <span class="params">n</span>, <span class="params">a</span>[<span class="params">i</span> - 1], <span class="params">std</span>::<span class="params">greater</span>&lt;<span class="params">int</span>&gt;()</span>) - a - <span class="number">1</span>;</span><br><span class="line">    swap(a<span class="literal">[<span class="identifier">i</span> - <span class="number">1</span>]</span>, a<span class="literal">[<span class="identifier">j</span>]</span>);</span><br><span class="line">    std::reverse(a + i, a + n);</span><br><span class="line">    return <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这种做法还有个优点就是避免了重复输出。<br>比如对序列112，用DFS做会生成两个112。而用这种方法做：</p>
+<ol>
+<li>a[1]和a[2]交换，得到121；</li>
+<li>a[0]和a[1]交换，得到211，结束。</li>
+</ol>
+<p>因为每次交换的是a[i-1]和大于a[i-1]的a[j]，因此不会像交换法或DFS一样将a[i-1]和相等的a[j]交换。<br>这里使用<code>lower_bound()</code>在降序序列中进行二分查找，找到用来和a[i-1]交换的a[j]。而STL直接是从后往前查找，原因是<code>next_permutation()</code>是基于双向迭代器的，无法应用于二分查找。虽然理论上我这种做法更快，但实际上生成全排列的时间复杂度是O(n!)，n不可能很大，充其量上两位数，相比起全排列本身的复杂度，O(n)到O(logn)的效率提升实际上无关痛痒。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/09/05/%E7%94%9F%E6%88%90%E5%AD%97%E5%85%B8%E5%BA%8F%E7%9A%84%E5%85%A8%E6%8E%92%E5%88%97%E7%AE%97%E6%B3%95/" data-id="cl1qn407j001u4c1uh7mdbj01" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/C/" rel="tag">C++</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/algorithm/" rel="tag">algorithm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+
+
+  <nav id="page-nav">
+    
+    <a class="extend prev" rel="prev" href="/page/4/">&amp;laquo; Prev</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><span class="page-number current">5</span>
+  </nav>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list" itemprop="keywords"><li class="tag-list-item"><a class="tag-list-link" href="/tags/C/" rel="tag">C++</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Go/" rel="tag">Go</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Java/" rel="tag">Java</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Kafka/" rel="tag">Kafka</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Pulsar/" rel="tag">Pulsar</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Python/" rel="tag">Python</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Scala/" rel="tag">Scala</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/algorithm/" rel="tag">algorithm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/golang/" rel="tag">golang</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/thread/" rel="tag">thread</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/vim/" rel="tag">vim</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" rel="tag">搭环境</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" rel="tag">网络编程</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/%E9%93%BE%E6%8E%A5/" rel="tag">链接</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/C/" style="font-size: 20px;">C++</a> <a href="/tags/Go/" style="font-size: 10px;">Go</a> <a href="/tags/Java/" style="font-size: 16.67px;">Java</a> <a href="/tags/Kafka/" style="font-size: 18.33px;">Kafka</a> <a href="/tags/Pulsar/" style="font-size: 13.33px;">Pulsar</a> <a href="/tags/Python/" style="font-size: 10px;">Python</a> <a href="/tags/Scala/" style="font-size: 10px;">Scala</a> <a href="/tags/algorithm/" style="font-size: 10px;">algorithm</a> <a href="/tags/golang/" style="font-size: 10px;">golang</a> <a href="/tags/thread/" style="font-size: 10px;">thread</a> <a href="/tags/vim/" style="font-size: 15px;">vim</a> <a href="/tags/%E6%90%AD%E7%8E%AF%E5%A2%83/" style="font-size: 16.67px;">搭环境</a> <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" style="font-size: 10px;">网络编程</a> <a href="/tags/%E9%93%BE%E6%8E%A5/" style="font-size: 11.67px;">链接</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/05/">May 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/04/">April 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2022/02/">February 2022</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/10/">October 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/09/">September 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/08/">August 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/05/">May 2021</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/08/">August 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">July 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/01/">January 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">November 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">October 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">September 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/07/">July 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/06/">June 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">January 2019</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/12/">December 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">November 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/10/">October 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">September 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2022/05/14/Pulsar-AVRO-schema-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB%EF%BC%9A%E5%88%9D%E8%AF%86/">Pulsar AVRO schema 源码阅读：初识</a>
+          </li>
+        
+          <li>
+            <a href="/2022/04/08/Python-lambda-%E5%AE%9E%E7%8E%B0%E5%9B%9E%E8%B0%83%E5%87%BD%E6%95%B0/">Python lambda 实现回调函数</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/27/Java-Stream-%E7%AE%80%E5%8D%95%E5%AD%A6%E4%B9%A0/">Java Stream 简单学习</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/06/Java-Executor-%E5%AD%A6%E4%B9%A0/">Java Executor 学习</a>
+          </li>
+        
+          <li>
+            <a href="/2021/10/03/%E9%87%8D%E6%96%B0%E5%AD%A6%E4%B9%A0-Golang/">重新学习 Golang</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2022 XYZ, aka BewareMyPower<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
